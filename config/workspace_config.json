@@ -1,0 +1,31 @@
+{
+  "workspaceRoot": "workspaces/PalmReader",
+  "defaultStructure": {
+    "apks": "apks",
+    "jadx": "jadx_src",
+    "docs": "docs",
+    "runtime": {
+      "base": "runtime",
+      "internal": "runtime/internal",
+      "external": "runtime/external"
+    }
+  },
+  "apps": [
+    {
+      "packageName": "com.target.example",
+      "alias": "TargetAppOne"
+    },
+    {
+      "packageName": "com.competitor.example",
+      "alias": "CompetitorApp"
+    },
+    {
+      "packageName": "com.zodiac.horoscope.palmreader.scanpalmistry",
+      "alias": "Scanpalmistry"
+    },
+    {
+      "packageName": "org.lichess.mobileV2",
+      "alias": "Mobilev2"
+    }
+  ]
+}

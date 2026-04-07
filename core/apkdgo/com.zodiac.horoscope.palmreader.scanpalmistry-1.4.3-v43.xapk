@@ -1,0 +1,76 @@
+<html>
+<head>
+    <meta http-equiv="content-type" content="text/html;charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#24cd77">
+    <title>Redirecting</title>
+    <meta name="robots" content="noindex">
+    <meta http-equiv="refresh" content="2; url=https://apkpure.com">
+    <style>
+        body{background: #f2f5f9}
+        a{text-decoration: underline;color: #00A6ED}
+        .jump {text-align:center; width: 95%;max-width: 640px;margin:0 auto;z-index:99999;font-size:13px;height:160px;position:absolute;top:50%;left:0;right:0;margin-top:-80px}
+        .jump .logo-img {width:100%;margin:0 auto;margin-bottom:15px}
+        .jump .logo-img img {padding-bottom:15px}
+
+        .jump .text-wrap{margin: 0 auto;color: #8a8a8a}
+        .jump .text{word-wrap: break-word;margin-bottom: 15px}
+        .jump .text div{color: #636363;margin: 10px 0}
+
+        .loading-bar {width: 100%;z-index: 2000;height: 3px;position: relative}
+        .loading-bar-inner {height: 2px;transition: width .2s linear;width: 50%;background-color: #24cd77;}
+        .loading-bg {height: 2px;z-index: -1;position: absolute;top: 0;right: 0;bottom: 0;left:0;background-color: #e0e0e0;}
+    </style>
+</head>
+<body>
+
+<div class="jump">
+    <div class="logo-img">
+        <a href="/" title="Go to Home"><img src="https://static.apkpures.xyz/www/static/imgs/logo_new.png"/></a>
+        <div class="loading-bar">
+            <div class="loading-bar-inner" id="inner"></div>
+            <div class="loading-bg"></div>
+        </div>
+    </div>
+    <div class="text-wrap">
+        <div class="text">Redirecting you to <div>https://apkpure.com</div></div>
+        <div>If you are not automatically redirected, <a href="https://apkpure.com" rel="nofollow">Click here</a>.</div>
+    </div>
+</div>
+</body>
+<script>
+    var timer;
+    window.onload = function () {
+        setTimeout(function () {
+            finish();
+            location.replace('https://apkpure.com'+document.location.hash);
+        },1000)
+    }
+    function clearTimer() {
+        if (timer) {
+            clearInterval(timer);
+            timer = null;
+        }
+    }
+    function start() {
+        if (timer) return;
+        var percent = 0;
+        update(percent);
+        timer = setInterval(() => {
+            percent += Math.floor(Math.random() * 3 + 5);
+            if (percent > 95) {
+                clearTimer();
+            }
+            update(percent);
+        }, 200);
+    }
+    function update(percent) {
+        document.getElementById('inner').style.width = percent + '%'
+    }
+    function finish(){
+        clearTimer();
+        update(100);
+    }
+    start();
+</script>
+</html>
