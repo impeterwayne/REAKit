@@ -33,13 +33,13 @@ flowchart TD
         direction TB
         S1["<b>1. are init</b><br/><i>Workspace Setup</i> · are target"]
         S2["<b>2. are download</b><br/><i>APK Acquisition via apkd</i>"]
-        S3["<b>3. are decode</b><br/><i>JADX Decompilation</i> · are jadx-gui · are apktool"]
+        S3["<b>3. are decode</b><br/><i>JADX Decompilation</i>"]
         S1 --> S2 --> S3
     end
 
     subgraph Dynamic ["Dynamic Analysis Loop"]
         direction TB
-        S4["<b>4. are scrcpy</b><br/><i>Device Control & UI Automation</i> · are mirror"]
+        S4["<b>4. are scrcpy</b><br/><i>Device Control & UI Automation</i>"]
         S5["<b>5. are pull</b><br/><i>ADB Sandbox Runtime Extraction</i>"]
         
         S4 -->|Interact & Trigger State| S5
