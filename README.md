@@ -28,22 +28,32 @@ are env
 `ARE_Kit` is partitioned into clean, modular components coordinated by a unified CLI engine:
 
 ```mermaid
-graph TD
-    User[Developer / Security Analyst / Agent] -->|are cli command| Engine[arekit Core Engine]
-    Engine --> A[are init: Workspace Provisioner]
-    Engine --> B[are download: APK Downloader via apkd]
-    Engine --> C[are decode: JADX Decompiler Engine]
-    Engine --> D[are pull: ADB Runtime Sandbox Extractor]
-    Engine --> E[are scrcpy: Low-Latency Device Automation]
-    Engine --> F[are mirror: Desktop Screen Mirroring]
-    Engine --> G[are jadx-gui: Interactive Graphical Decompiler]
-    Engine --> H[are apktool: Smali Disassembly & Rebuilding]
-    Engine --> I[are target: Dynamic Target Config Management]
-    
-    A --> Workspace[(Target Workspace)]
-    B --> Workspace
-    C --> Workspace
-    D --> Workspace
+flowchart TD
+    User([User / Analyst / Agent]) --> CLI["<b>are CLI</b>"]
+
+    subgraph Static ["Static Pipeline (are pipeline)"]
+        direction TB
+        S1["<b>1. are init</b><br/><i>Workspace Setup</i> · are target"]
+        S2["<b>2. are download</b><br/><i>APK Acquisition via apkd</i>"]
+        S3["<b>3. are decode</b><br/><i>JADX Decompilation</i> · are jadx-gui · are apktool"]
+        S1 --> S2 --> S3
+    end
+
+    subgraph Dynamic ["Dynamic Analysis Loop"]
+        direction TB
+        S4["<b>4. are scrcpy</b><br/><i>Device Control & UI Automation</i> · are mirror"]
+        S5["<b>5. are pull</b><br/><i>ADB Sandbox Runtime Extraction</i>"]
+        
+        S4 -->|Interact & Trigger State| S5
+        S5 -->|Iterate / Next Action| S4
+    end
+
+    CLI --> Static
+    Static --> Dynamic
+
+    Static --> WS[(Target Workspace)]
+    S5 --> WS
+    S4 <--> DEV[(Android Device / Emulator)]
 ```
 
 ---
@@ -59,39 +69,6 @@ graph TD
 7. **[Configuration Schema Guide](./docs/workspace_config.md)** - Central `workspace_config.json` schema details.
 
 ---
-
-## Unified CLI & Core Workflow
-
-The kit automates the core stages of Android Application analysis:
-
-1. **Workspace Initialization (`are init`)**
-   Reads targets and structures standard workspaces.
-   *See [Workspace Setup & Management Guide](./docs/workspace_management.md) for usage details.*
-
-2. **Target Downloading (`are download` / `are dl`)**
-   Downloads target application files securely from remote sources using the Go-based APK downloader.
-   *See [Target Downloading Guide](./docs/downloading_targets.md) for download configurations.*
-
-3. **Decompilation (`are decode` / `are decompile`)**
-   Extracts bytecode, merges split APKs (`.xapk`/`.apks`), and decompiles into readable Java Gradle projects using JADX.
-   *See [Decompilation Guide](./docs/decompilation.md) for decompiling options.*
-
-4. **Runtime Sandbox Extraction (`are pull` / `are runtime`)**
-   Elevates shell privileges (root/su/run-as) and pulls app internal databases and shared preferences directly from emulator or device sandboxes.
-   *See [Runtime Extraction Guide](./docs/runtime_extraction.md) for ADB privilege negotiation.*
-
-5. **Device Automation & Control (`are scrcpy` / `are mirror`)**
-   Low-latency tap, swipe, key injection, screenshot capture, UI dumping, and interactive screen mirroring.
-   *See [Device Control & Automation Guide](./docs/scrcpy_control.md) for automation features.*
-
-6. **GUI & Smali Workflows (`are jadx-gui` / `are apktool`)**
-   Interactive class exploration, code search, and low-level Smali editing.
-
-7. **Target & Config Lifecycle (`are target`)**
-   Dynamically add, remove, and list workspace applications without touching raw JSON files.
-
----
-
 
 ## Prerequisites
 

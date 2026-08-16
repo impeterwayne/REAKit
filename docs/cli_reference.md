@@ -29,7 +29,7 @@ These options apply across all relevant subcommands:
 | [`are download`](#2-are-download--are-dl) | `dl` | Download APK/XAPK packages via `apkd` | `are dl com.example.app` |
 | [`are decode`](#3-are-decode--are-decompile) | `decompile` | Decompile APKs into Java Gradle projects via JADX | `are decode com.example.app` |
 | [`are pull`](#4-are-pull--are-runtime) | `runtime` | Extract app sandbox files via ADB (root/su/run-as) | `are pull com.example.app` |
-| [`are pipeline`](#5-are-pipeline--are-all--are-run) | `all`, `run` | Execute complete automated flow (init -> dl -> decode -> pull) | `are pipeline -t com.example.app` |
+| [`are pipeline`](#5-are-pipeline--are-all--are-run) | `all`, `run` | Execute complete static pipeline (init -> dl -> decode) | `are pipeline -t com.example.app` |
 | [`are scrcpy`](#6-are-scrcpy--are-control) | `control` | Low-latency device automation via `scrcpy-cli` | `are scrcpy tap 500 1200` |
 | [`are mirror`](#7-are-mirror--are-screen) | `screen` | Launch desktop screen mirroring window | `are mirror -s emulator-5554` |
 | [`are jadx-gui`](#8-are-jadx-gui) | | Launch interactive graphical JADX decompiler | `are jadx-gui -t com.example.app` |
@@ -144,7 +144,7 @@ are pull com.zodiac.horoscope.palmreader.scanpalmistry
 ---
 
 ### 5. `are pipeline` (`are all`, `are run`)
-Executes the full end-to-end workflow (init -> download -> decode -> pull) sequentially.
+Executes the automated static pipeline workflow (init -> download -> decode) sequentially.
 
 ```bash
 are pipeline [target] [options]
@@ -156,7 +156,6 @@ are pipeline [target] [options]
 | `-t` | `--target <target>` | Target package name or Play Store URL |
 | `-s` | `--source <provider>` | APK download source repository |
 | | `--skip-decode` | Skip the JADX decompilation phase |
-| | `--skip-pull` | Skip the ADB runtime extraction phase |
 
 ```bash
 are pipeline -t https://play.google.com/store/apps/details?id=com.zodiac.horoscope.palmreader.scanpalmistry

@@ -64,12 +64,11 @@ def create_parser() -> argparse.ArgumentParser:
     pull_p.add_argument("--config", "-c", help="Path to workspace_config.json")
 
     # 5. pipeline / all / run
-    pipe_p = subparsers.add_parser("pipeline", aliases=["all", "run"], help="Run end-to-end flow: init -> download -> decode -> pull")
+    pipe_p = subparsers.add_parser("pipeline", aliases=["all", "run"], help="Run automated static pipeline: init -> download -> decode")
     pipe_p.add_argument("target_pos", nargs="?", help="Target package name or Store URL")
     pipe_p.add_argument("--target", "-t", help="Target package name or Store URL")
     pipe_p.add_argument("--source", "-s", help="Download source provider")
     pipe_p.add_argument("--skip-decode", action="store_true", help="Skip decompilation step")
-    pipe_p.add_argument("--skip-pull", action="store_true", help="Skip runtime extraction step")
     pipe_p.add_argument("--workspace", "-w", help="Workspace root directory")
     pipe_p.add_argument("--config", "-c", help="Path to workspace_config.json")
 
@@ -192,12 +191,12 @@ def main():
         log_info(f"Workspace Directory: {config_mgr.get_app_paths(pkg)['root']}")
         
         # 1. Init
-        log_info("[Step 1/4] Initializing workspace...")
+        log_info("[Step 1/3] Initializing workspace...")
         mgr = WorkspaceManager(config_mgr)
         mgr.init_target(pkg, source_link=target if target.startswith("http") else None)
 
         # 2. Download
-        log_info("[Step 2/4] Downloading target APK...")
+        log_info("[Step 2/3] Downloading target APK...")
         dl = Downloader(config_mgr)
         dl_ok = dl.download_package(target, source=args.source)
         if not dl_ok:
@@ -205,21 +204,13 @@ def main():
 
         # 3. Decode
         if not args.skip_decode:
-            log_info("[Step 3/4] Decompiling APKs with JADX...")
+            log_info("[Step 3/3] Decompiling APKs with JADX...")
             dec = Decompiler(config_mgr)
             dec.decompile_package(pkg)
         else:
-            log_info("[Step 3/4] Decompilation skipped (--skip-decode).")
+            log_info("[Step 3/3] Decompilation skipped (--skip-decode).")
 
-        # 4. Pull
-        if not args.skip_pull:
-            log_info("[Step 4/4] Extracting runtime data via ADB...")
-            extractor = RuntimeExtractor(config_mgr)
-            extractor.extract_package(pkg)
-        else:
-            log_info("[Step 4/4] Runtime extraction skipped (--skip-pull).")
-
-        log_success(f"=== Pipeline completed successfully for {pkg}! ===")
+        log_success(f"=== Static pipeline completed successfully for {pkg}! ===")
 
     elif cmd in ("scrcpy", "control"):
         bridge = ScrcpyBridge()
