@@ -29,8 +29,6 @@ are env
 
 ```mermaid
 flowchart TD
-    User([User / Analyst / Agent]) --> CLI["<b>are CLI</b>"]
-
     subgraph Static ["Static Pipeline (are pipeline)"]
         direction TB
         S1["<b>1. are init</b><br/><i>Workspace Setup</i> · are target"]
@@ -48,7 +46,6 @@ flowchart TD
         S5 -->|Iterate / Next Action| S4
     end
 
-    CLI --> Static
     Static --> Dynamic
 
     Static --> WS[(Target Workspace)]
