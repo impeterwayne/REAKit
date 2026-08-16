@@ -10,5 +10,18 @@
       "external": "runtime/external"
     }
   },
-  "targets": []
+  "targets": [
+    {
+      "packageName": "net.rention.smarter",
+      "alias": "Smarter"
+    },
+    {
+      "packageName": "ru.vk.store",
+      "alias": "Store"
+    },
+    {
+      "packageName": "com.nashstore",
+      "alias": "Nashstore"
+    }
+  ]
 }

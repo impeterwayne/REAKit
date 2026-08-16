@@ -254,6 +254,9 @@ var rootCmd = cobra.Command{
 			}
 
 			tq.Wait()
+			if downloadSuccessCount.Load() == 0 && downloadErrorCount.Load() > 0 {
+				os.Exit(1)
+			}
 		}
 	},
 }

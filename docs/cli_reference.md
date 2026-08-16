@@ -155,10 +155,12 @@ are pipeline [target] [options]
 | | `[target]` | Target package name or Play Store URL (positional) |
 | `-t` | `--target <target>` | Target package name or Play Store URL |
 | `-s` | `--source <provider>` | APK download source repository |
+| `-j` | `--threads <count>` | Worker threads for JADX decompilation (default: CPU cores) |
+| | `--heap <size>` | JVM Heap memory allocation (default: `16g`, e.g. `16g`, `8g`) |
 | | `--skip-decode` | Skip the JADX decompilation phase |
 
 ```bash
-are pipeline -t https://play.google.com/store/apps/details?id=com.zodiac.horoscope.palmreader.scanpalmistry
+are pipeline -t https://play.google.com/store/apps/details?id=com.zodiac.horoscope.palmreader.scanpalmistry --heap 16g
 ```
 
 ---

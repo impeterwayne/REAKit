@@ -68,6 +68,8 @@ def create_parser() -> argparse.ArgumentParser:
     pipe_p.add_argument("target_pos", nargs="?", help="Target package name or Store URL")
     pipe_p.add_argument("--target", "-t", help="Target package name or Store URL")
     pipe_p.add_argument("--source", "-s", help="Download source provider")
+    pipe_p.add_argument("--threads", "-j", type=int, help="Number of worker threads for JADX")
+    pipe_p.add_argument("--heap", default="16g", help="JVM Heap memory allocation for JADX (e.g. 16g, 8g)")
     pipe_p.add_argument("--skip-decode", action="store_true", help="Skip decompilation step")
     pipe_p.add_argument("--workspace", "-w", help="Workspace root directory")
     pipe_p.add_argument("--config", "-c", help="Path to workspace_config.json")
@@ -199,14 +201,31 @@ def main():
         log_info("[Step 2/3] Downloading target APK...")
         dl = Downloader(config_mgr)
         dl_ok = dl.download_package(target, source=args.source)
+
+        paths = config_mgr.get_app_paths(pkg)
+        has_existing_apks = False
+        if paths["apks"].exists():
+            existing_apks = [
+                f for f in paths["apks"].iterdir()
+                if f.is_file() and f.suffix in (".apk", ".xapk", ".apks")
+            ]
+            has_existing_apks = len(existing_apks) > 0
+
         if not dl_ok:
-            log_warn("Download failed or skipped. Continuing with existing files if present...")
+            if has_existing_apks:
+                log_warn("Download failed or skipped, but existing APK package(s) found. Continuing with existing files...")
+            else:
+                log_error(f"Pipeline aborted: Download failed for {pkg} and no existing APK/XAPK files found in {paths['apks']}.")
+                sys.exit(1)
 
         # 3. Decode
         if not args.skip_decode:
-            log_info("[Step 3/3] Decompiling APKs with JADX...")
+            log_info(f"[Step 3/3] Decompiling APKs with JADX (Heap: {args.heap})...")
             dec = Decompiler(config_mgr)
-            dec.decompile_package(pkg)
+            dec_ok = dec.decompile_package(pkg, threads=args.threads, heap_memory=args.heap)
+            if not dec_ok:
+                log_error(f"Pipeline failed: Decompilation failed for {pkg}.")
+                sys.exit(1)
         else:
             log_info("[Step 3/3] Decompilation skipped (--skip-decode).")
 

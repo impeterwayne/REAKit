@@ -8,6 +8,7 @@ import (
 	"net/http"
 	neturl "net/url"
 	"path"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -193,10 +194,58 @@ func (s *ApkCombo) resolveVersionCode(versionUrl string) (apkComboVersionItem, e
 	if variantBlock.Length() == 0 {
 		variantBlock = doc.Find("#best-variant-tab .variant")
 		if variantBlock.Length() == 0 {
-			return apkComboVersionItem{}, fmt.Errorf("no variants found for version URL %s", versionUrl)
+			variantBlock = doc.Find(".variant")
 		}
 	}
-	versionCandidate, err := s.parseVersionItem(variantBlock)
+	if variantBlock.Length() == 0 {
+		// Dynamic / AJAX loading fallback: Check for xid in page script
+		html, _ := doc.Html()
+		xidRegex := regexp.MustCompile(`var\s+xid\s*=\s*["']([^"']+)["']`)
+		match := xidRegex.FindStringSubmatch(html)
+		if len(match) > 1 {
+			xid := match[1]
+			parsedUrl, pErr := neturl.Parse(versionUrl)
+			if pErr == nil {
+				pathParts := strings.Split(strings.Trim(parsedUrl.Path, "/"), "/")
+				if len(pathParts) >= 2 {
+					slug := pathParts[0]
+					pkg := pathParts[1]
+					dlPostUrl := fmt.Sprintf("%s/%s/%s/%s/dl", s.config.BaseURL, slug, pkg, xid)
+
+					formData := neturl.Values{}
+					formData.Set("package_name", pkg)
+					formData.Set("version", "")
+
+					postReq, pReqErr := s.NewRequest("POST", dlPostUrl, strings.NewReader(formData.Encode()))
+					if pReqErr == nil {
+						postReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+						postReq.Header.Set("Referer", versionUrl)
+
+						postRes, postDoErr := s.Http().Do(postReq)
+						if postDoErr == nil {
+							reader, unpackErr := unpackResponse(postRes)
+							if unpackErr == nil {
+								defer reader.Close()
+								if postDoc, docErr := goquery.NewDocumentFromReader(reader); docErr == nil {
+									variantBlock = postDoc.Find("#variants-tab .variant")
+									if variantBlock.Length() == 0 {
+										variantBlock = postDoc.Find("#best-variant-tab .variant")
+										if variantBlock.Length() == 0 {
+											variantBlock = postDoc.Find(".variant")
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	if variantBlock.Length() == 0 {
+		return apkComboVersionItem{}, fmt.Errorf("no variants found for version URL %s", versionUrl)
+	}
+	versionCandidate, err := s.parseVersionItem(variantBlock.First())
 	if err != nil {
 		return apkComboVersionItem{}, err
 	}

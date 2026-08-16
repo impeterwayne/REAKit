@@ -131,6 +131,12 @@ func NewHttpClientForSource(sourceName string, timeout time.Duration, p *RetryPo
 	} else {
 		transport.Proxy = http.ProxyFromEnvironment
 	}
+	if strings.EqualFold(sourceName, "rustore") || strings.EqualFold(sourceName, "nashstore") {
+		if transport.TLSClientConfig == nil {
+			transport.TLSClientConfig = &tls.Config{}
+		}
+		transport.TLSClientConfig.InsecureSkipVerify = true
+	}
 	base := &http.Client{
 		Timeout:   timeout,
 		Transport: transport,

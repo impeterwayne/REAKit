@@ -53,11 +53,18 @@ class Downloader:
         cwd = str(self.apkd_path.parent.resolve()) if self.apkd_path.is_file() else None
         try:
             res = subprocess.run(cmd, cwd=cwd)
-            if res.returncode == 0:
-                log_success(f"Successfully downloaded {pkg}")
+            downloaded_files = [
+                f for f in out_path.iterdir()
+                if f.is_file() and f.suffix in (".apk", ".xapk", ".apks")
+            ]
+            if res.returncode == 0 and downloaded_files:
+                log_success(f"Successfully downloaded {pkg} ({len(downloaded_files)} package(s) present in {out_path.name})")
                 return True
             else:
-                log_error(f"Download failed for {pkg} (exit code {res.returncode})")
+                if not downloaded_files:
+                    log_error(f"Download failed for {pkg}: No APK/XAPK packages were saved in {out_path.resolve()}")
+                else:
+                    log_error(f"Download process failed for {pkg} (exit code {res.returncode})")
                 return False
         except FileNotFoundError:
             log_error(f"apkd executable not found at '{self.apkd_path}'. Please check core/apkdgo/apkd.exe")
