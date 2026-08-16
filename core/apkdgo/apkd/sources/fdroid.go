@@ -2,10 +2,12 @@ package sources
 
 import (
 	"compress/gzip"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/goccy/go-json"
 	"github.com/kiber-io/apkd/apkd/network"
@@ -38,30 +40,44 @@ type AppInfo struct {
 
 type FDroid struct {
 	BaseSource
-	appsCache map[string]map[string]any
-	jsonCache map[string]any
+	config      FDroidConfig
+	jsonCacheMu sync.Mutex
+	jsonCache   map[string]any
+}
+
+type FDroidConfig struct {
+	BaseSourceConfig `yaml:",inline"`
+	AppVersion       string `yaml:"appVersion"`
+}
+
+func defaultFDroidConfig() FDroidConfig {
+	return FDroidConfig{
+		BaseSourceConfig: BaseSourceConfig{
+			BaseURL: "https://f-droid.org",
+		},
+		AppVersion: "1.23.1",
+	}
 }
 
 func (s *FDroid) Name() string {
 	return "fdroid"
 }
 
-func (s *FDroid) Download(version Version) (io.ReadCloser, error) {
-	req, err := s.NewRequest("GET", "https://f-droid.org/repo"+version.Link, nil)
+func (s *FDroid) Download(version Version) (*DownloadStream, error) {
+	req, err := s.NewRequest("GET", s.config.BaseURL+"/repo"+version.Link, nil)
 	if err != nil {
 		return nil, err
 	}
-	// req.Header.Add("User-Agent", "F-Droid 1.21.1")
-	// req.Header.Add("Accept-Encoding", "gzip")
-	// req.Header.Add("accept-charset", "UTF-8")
-	return createResponseReader(req)
+	return createResponseReader(s.Http(), req)
 }
 
 func (s *FDroid) getJson() (map[string]any, error) {
+	s.jsonCacheMu.Lock()
+	defer s.jsonCacheMu.Unlock()
 	if s.jsonCache != nil {
 		return s.jsonCache, nil
 	}
-	url := "https://f-droid.org/repo/index-v2.json"
+	url := s.config.BaseURL + "/repo/index-v2.json"
 
 	req, err := s.NewRequest("GET", url, nil)
 
@@ -69,26 +85,24 @@ func (s *FDroid) getJson() (map[string]any, error) {
 		return nil, err
 	}
 
-	// req.Header.Add("User-Agent", "F-Droid 1.21.1")
-	// req.Header.Add("Accept-Encoding", "gzip")
-	// req.Header.Add("accept-charset", "UTF-8")
-
-	res, err := s.Net.Do(req)
-
+	res, err := s.Http().Do(req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to fetch fdroid index: %w", err)
 	}
-	if res.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("error: %s", res.Status)
-	}
-	var reader io.ReadCloser = res.Body
+	defer res.Body.Close()
 
+	reader := res.Body
 	if res.Header.Get("Content-Encoding") == "gzip" {
 		gzipReader, err := gzip.NewReader(res.Body)
 		if err != nil {
 			return nil, fmt.Errorf("error creating gzip reader: %w", err)
 		}
 		reader = gzipReader
+		defer reader.Close()
+	}
+
+	if res.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("error: %s", res.Status)
 	}
 
 	data, err := io.ReadAll(reader)
@@ -101,7 +115,7 @@ func (s *FDroid) getJson() (map[string]any, error) {
 	}
 	packages, ok := jsonData["packages"].(map[string]any)
 	if !ok {
-		return nil, fmt.Errorf("invalid JSON format, expected 'packages' object")
+		return nil, errors.New("invalid JSON format, expected 'packages' object")
 	}
 	s.jsonCache = packages
 
@@ -111,17 +125,18 @@ func (s *FDroid) getJson() (map[string]any, error) {
 func (s *FDroid) getAppInfo(data map[string]any, packageName string) (AppInfo, error) {
 	var appInfo AppInfo
 	for pkgName := range data {
-		if strings.EqualFold(pkgName, packageName) {
-			jsonBytes, err := json.Marshal(data[pkgName])
-			if err != nil {
-				return appInfo, fmt.Errorf("error encoding package JSON: %w", err)
-			}
-			if err := json.Unmarshal(jsonBytes, &appInfo); err != nil {
-				return appInfo, fmt.Errorf("error decoding package JSON: %w", err)
-			}
-			appInfo.PackageName = pkgName
-			return appInfo, nil
+		if !strings.EqualFold(pkgName, packageName) {
+			continue
 		}
+		jsonBytes, err := json.Marshal(data[pkgName])
+		if err != nil {
+			return appInfo, fmt.Errorf("error encoding package JSON: %w", err)
+		}
+		if err := json.Unmarshal(jsonBytes, &appInfo); err != nil {
+			return appInfo, fmt.Errorf("error decoding package JSON: %w", err)
+		}
+		appInfo.PackageName = pkgName
+		return appInfo, nil
 	}
 
 	return appInfo, &AppNotFoundError{PackageName: packageName}
@@ -159,19 +174,20 @@ func (s *FDroid) findNeededVersion(appInfo AppInfo, versionCode int) (Version, e
 	if versionCode != 0 {
 		var foundVersion bool
 		for _, remoteVersion := range appInfo.Versions {
-			if remoteVersion.Manifest.VersionCode == versionCode {
-				version.Name = remoteVersion.Manifest.VersionName
-				version.Code = remoteVersion.Manifest.VersionCode
-				version.Size = remoteVersion.File.Size
-				version.Link = remoteVersion.File.Name
-				version.PackageName = appInfo.PackageName
-				version.DeveloperId = appInfo.Metadata.AuthorName
-				foundVersion = true
-				break
+			if remoteVersion.Manifest.VersionCode != versionCode {
+				continue
 			}
+			version.Name = remoteVersion.Manifest.VersionName
+			version.Code = remoteVersion.Manifest.VersionCode
+			version.Size = remoteVersion.File.Size
+			version.Link = remoteVersion.File.Name
+			version.PackageName = appInfo.PackageName
+			version.DeveloperId = appInfo.Metadata.AuthorName
+			foundVersion = true
+			break
 		}
 		if !foundVersion {
-			err = &AppNotFoundError{}
+			err = &AppNotFoundError{PackageName: appInfo.PackageName}
 		}
 	} else {
 		var maxVersionCode int
@@ -181,15 +197,16 @@ func (s *FDroid) findNeededVersion(appInfo AppInfo, versionCode int) (Version, e
 			}
 		}
 		for _, remoteVersion := range appInfo.Versions {
-			if remoteVersion.Manifest.VersionCode == maxVersionCode {
-				version.Name = remoteVersion.Manifest.VersionName
-				version.Code = remoteVersion.Manifest.VersionCode
-				version.Size = remoteVersion.File.Size
-				version.Link = remoteVersion.File.Name
-				version.PackageName = appInfo.PackageName
-				version.DeveloperId = appInfo.Metadata.AuthorName
-				break
+			if remoteVersion.Manifest.VersionCode != maxVersionCode {
+				continue
 			}
+			version.Name = remoteVersion.Manifest.VersionName
+			version.Code = remoteVersion.Manifest.VersionCode
+			version.Size = remoteVersion.File.Size
+			version.Link = remoteVersion.File.Name
+			version.PackageName = appInfo.PackageName
+			version.DeveloperId = appInfo.Metadata.AuthorName
+			break
 		}
 	}
 	return version, err
@@ -226,12 +243,42 @@ func (s *FDroid) FindByDeveloper(developerId string) ([]string, error) {
 	return packages, nil
 }
 
-func init() {
+func newFDroidSource() (Source, error) {
 	s := &FDroid{}
-	s.appsCache = make(map[string]map[string]any)
 	s.Source = s
-	s.Net = network.DefaultClient().WithDefaultHeaders(http.Header{
-		"User-Agent": {"F-Droid 1.23.1"},
-	})
-	Register(s)
+	config, err := ResolveSourceConfig(s.Name(), defaultFDroidConfig())
+	if err != nil {
+		return nil, err
+	}
+	s.config = config
+	s.Log().Logd(fmt.Sprintf("Using config: %+v", config))
+	headers := ApplyConfiguredHeaders(http.Header{
+		"User-Agent": {"F-Droid " + config.AppVersion},
+	}, config.Headers)
+	s.Net = network.DefaultClientForSource(s.Name()).WithDefaultHeaders(headers).DisableHTTP2()
+	return s, nil
+}
+
+func init() {
+	RegisterSourceFactoryWithConfig(newFDroidSource, "fdroid",
+		NewConfigDecoderWithDefaults(
+			defaultFDroidConfig(),
+			func(c *FDroidConfig) {
+				NormalizeBaseSourceConfig(&c.BaseSourceConfig)
+				c.AppVersion = strings.TrimSpace(c.AppVersion)
+			},
+			func(c FDroidConfig) error {
+				if err := ValidateBaseSourceConfig(c.BaseSourceConfig); err != nil {
+					return err
+				}
+				if strings.TrimSpace(c.AppVersion) == "" {
+					return errors.New("appVersion cannot be empty")
+				}
+				if !appVersionRegexp.MatchString(c.AppVersion) {
+					return fmt.Errorf("appVersion %q is invalid", c.AppVersion)
+				}
+				return nil
+			},
+		),
+	)
 }

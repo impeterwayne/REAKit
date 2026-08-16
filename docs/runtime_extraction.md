@@ -1,95 +1,151 @@
 # Android Runtime Sandbox Data Extraction Guide
 
-This guide details how to automatically pull dynamic application storage data (sandbox files, databases, shared preferences, caches) from physical devices and emulators using **ARE_Kit**.
+This guide details how to automatically extract dynamic application sandbox storage (SQLite databases, Shared Preferences XML, caches, and external files) from physical devices and emulators using **ARE_Kit**.
 
 ---
 
-## 🔍 Sandbox Data Puller (`pull_runtime_data.py`)
+## Sandbox Data Puller (`are pull` / `are runtime`)
 
-During application execution, Android locks internal app state behind user isolation sandboxes (`/data/data/<package_name>`).
+During application execution on Android, internal app states are protected behind Linux user-isolation sandboxes (`/data/data/<package_name>`).
 
-The script `scripts/pull_runtime_data.py` bridges this sandbox boundary by negotiating permissions and downloading directories, databases (SQLite), Shared Preferences (XML), and custom caches directly into your local workspace.
+The `are pull` command bridges this boundary by automatically negotiating permissions across multiple privilege tiers and downloading internal databases, configurations, and caches directly into your local workspace.
 
 ### Core Extraction Architecture
 
 ```mermaid
 graph TD
-    A[Start Pulling] --> B{Try Native 'adb root'}
-    B -->|Success| C[Mode: native_root]
-    B -->|Failed| D{Try Magisk 'su'}
-    D -->|Success| E[Mode: su]
-    D -->|Failed| F{Try 'run-as <package>'}
-    F -->|Success| G[Mode: run-as debuggable]
-    F -->|Failed| H[Sandbox Blocked / Error]
+    User[User / Agent / Pipeline] -->|are pull <package_name>| Engine[ARE_Kit Runtime Extractor Engine]
     
-    C & E & G --> I[Query Files via Shell 'find']
-    I --> J[Validate & Sanitize Paths]
-    J --> K[Pull Files via 'adb exec-out cat']
-    K --> L[Save locally in workspaces/<alias>/runtime/]
+    subgraph Privilege ["Sequential Privilege Negotiation"]
+        Engine --> Step1{Try 1: 'adb root'}
+        Step1 -->|Success| Mode1[Mode: native_root]
+        Step1 -->|Failed| Step2{Try 2: Magisk 'su'}
+        Step2 -->|Success| Mode2[Mode: su]
+        Step2 -->|Failed| Step3{Try 3: 'run-as <package>'}
+        Step3 -->|Success| Mode3[Mode: run-as debuggable]
+        Step3 -->|Failed| Error[Sandbox Blocked / Error]
+    end
+
+    subgraph Inspection ["Remote File Discovery & Security Guards"]
+        Mode1 & Mode2 & Mode3 --> Find[Discover Sandbox Files via Shell 'find']
+        Find --> Validate[Path Traversal & Windows Filename Sanitization]
+    end
+
+    subgraph Extraction ["Streaming & Workspace Population"]
+        Validate --> Stream[Stream File Data via 'adb exec-out cat']
+        Stream --> LocalWork["workspaces/<package_name>/runtime/"]
+        LocalWork --> Internal["internal/ (databases, shared_prefs, files)"]
+        LocalWork --> External["external/ (/sdcard/Android/data/...)"]
+    end
 ```
 
 ---
 
-## 🛡️ Sequential Privilege Escalation Negotiation
+## CLI Command Reference (`are pull` / `are runtime`)
 
-The script automatically executes a 3-tier fallback strategy to access locked internal files:
+```bash
+are pull [package_name] [options]
+```
+
+*Alias:* `are runtime`
+
+### Options
+
+| Flag | Long Option | Description | Default |
+|---|---|---|---|
+| | `[package_name]` | Target package name (positional) | Active target from config |
+| `-p` | `--package <pkg>` | Target Android package name | Active target from config |
+| `-t` | `--target <pkg>` | Alias for `--package` | Active target from config |
+| `-w` | `--workspace <dir>` | Custom workspace root directory path | `./workspaces` |
+| `-c` | `--config <file>` | Path to workspace configuration file | `config/workspace_config.json` |
+
+---
+
+### Practical Examples
+
+#### 1. Extract Runtime Data for Active Target
+Pulls data for the primary target configured in `workspace_config.json`:
+```bash
+are pull
+```
+
+#### 2. Extract Runtime Data by Package Identifier
+Specify the target package directly as a positional argument:
+```bash
+are pull com.zodiac.horoscope.palmreader.scanpalmistry
+```
+
+#### 3. Extract Runtime Data with Explicit Package Flag
+```bash
+are pull --package com.example.target
+```
+
+---
+
+## Sequential Privilege Escalation Negotiation
+
+`ARE_Kit` automatically evaluates and executes a 3-tier fallback strategy to access locked internal files without manual shell commands:
 
 ### Tier 1: Native ADB Daemon Root (`native_root`)
-* **Target Environment:** Standard Android Virtual Devices (AVD), Genymotion, or engineering firmware.
-* **Mechanism:** Runs `adb root` to elevate the ADB daemon directly to root. Then lists and copies files natively.
+* **Target Environments:** Standard Android Virtual Devices (AVD), Android Studio Emulators, Genymotion, or engineering firmware builds.
+* **Mechanism:** Runs `adb root` to restart the adbd daemon with root privileges, granting immediate unrestricted filesystem access.
 
 ### Tier 2: Magisk Superuser Elevation (`su`)
-* **Target Environment:** Rooted physical devices.
-* **Mechanism:** Runs finding commands wrapped via Magisk shell elevation:
+* **Target Environments:** Rooted physical hardware (e.g. Pixel, Samsung, OnePlus with Magisk / KernelSU / APatch).
+* **Mechanism:** Executes file search commands wrapped via Magisk shell elevation:
   ```bash
-  adb shell "su -c 'find /data/data/<pkg> -type f'"
+  adb shell "su -c 'find /data/data/<package_name> -type f'"
   ```
-  File reads are executed via piping `su -c cat <file>` through ADB to bypass Unix permissions.
+  File streams are transferred using `adb exec-out "su -c 'cat <file>'"` to bypass standard Unix permissions.
 
 ### Tier 3: Debuggable Run-As Sandbox Entry (`run-as`)
-* **Target Environment:** Non-rooted devices running debug-built applications.
-* **Mechanism:** Runs instructions directly under the target package's application UID:
+* **Target Environments:** Non-rooted production devices running debug-built applications (`android:debuggable="true"`).
+* **Mechanism:** Executes instructions directly under the target package's application Linux UID:
   ```bash
   adb shell run-as <package_name> find /data/data/<package_name> -type f
   ```
-  This is a powerful technique enabling developers to test local data structures on real hardware without cracking device security.
+  This allows extracting sandbox data without rooting the physical device.
 
 ---
 
-## 🔒 Security: Path Traversal & Sanitization Safeguards
+## Security: Path Traversal & Filename Sanitization
 
-Transferring file structures from Unix-based Android devices to Windows hosts can expose the system to security vulnerabilities. `pull_runtime_data.py` enforces active countermeasures:
+Transferring file hierarchies from Unix-based Android devices to Windows hosts requires active filesystem protections. `RuntimeExtractor` enforces:
 
-* **Filename Sanitization:** Removes character sequences illegal on Windows filesystems (`<>:"\|?*`), replacing them with underscores to prevent OS filesystem exceptions.
-* **Traversal Protections:** Computes PurePosixPath mappings relative to the app's base sandbox folder. Any file listing containing path injection elements (`.`, `..`, or absolute escapes) is discarded, preventing attackers from downloading arbitrary host files via malicious symlinks.
+* **Filename Sanitization:** Replaces characters illegal on Windows filesystems (`<>:"/\|?*`) with underscores to prevent OS filesystem exceptions.
+* **Path Traversal Guards:** Computes `PurePosixPath` mappings relative to the app's base sandbox folder. Any path containing injection markers (`..`, absolute path escapes, or symbolic links escaping the sandbox) is rejected.
 
 ---
 
-## 📖 Practical Examples
+## Extracted File Layout
 
-### Running the Data Puller
-To execute standard extraction for your active target app:
-
-```bash
-python scripts/pull_runtime_data.py
-```
-
-### Extracted File Target Mapping
 Extracted files are cleanly partitioned into local workspace directories:
 
-* **Internal files:** Saved under `workspaces/<package_name>/runtime/internal/`. Examples include:
-  * `shared_prefs/`: App configurations in XML format.
-  * `databases/`: SQLite database files containing sensitive app states.
-  * `cache/`: Temporary data stores.
-* **External files:** Saved under `workspaces/<package_name>/runtime/external/`. Includes downloaded assets, public documents, and logs stored under the shared storage directory `/sdcard/Android/data/<package_name>`.
+```text
+workspaces/com.zodiac.horoscope.palmreader.scanpalmistry/runtime/
+├── internal/                                  # Pulled from /data/data/<package_name>/
+│   ├── databases/                             # SQLite database files
+│   │   ├── app_database.db
+│   │   └── app_database.db-journal
+│   ├── shared_prefs/                          # XML preference key-value stores
+│   │   ├── user_session.xml
+│   │   └── analytics_config.xml
+│   └── files/                                 # Encrypted blobs, keys, local caches
+└── external/                                  # Pulled from /sdcard/Android/data/<package>/
+    ├── cache/
+    └── files/
+```
+
+
 
 ---
 
-## ⚠️ Troubleshooting Access Blocks
+## Troubleshooting Access Blocks
 
-If you receive the error:
+If you encounter:
 `[!] Sandbox blocked read. Make sure the app is installed, device is rooted, or app is debuggable.`
 
-1. **Verify ADB Connection:** Run `adb devices` to make sure your computer sees the Android hardware.
-2. **Check App Status:** Make sure the package listed in `config/targets.txt` is fully installed and active on the device.
-3. **Verify Root Permissions:** If using a rooted physical device, unlock your phone screen and check the Magisk app to confirm that Shell/ADB has been granted Superuser access.
+1. **Verify ADB Connectivity:** Run `are env` or `adb devices` to ensure your device is recognized with authorization (`device` status, not `unauthorized` or `offline`).
+2. **Confirm App is Installed:** Ensure the target package is installed on the connected device.
+3. **Grant Magisk Permissions:** On rooted physical devices, unlock the screen and confirm that the Magisk Superuser prompt was granted to `com.android.shell` / ADB.
+4. **Debuggable Flag:** On non-rooted devices, ensure the APK was built with `android:debuggable="true"` in its `AndroidManifest.xml` to allow `run-as` execution.

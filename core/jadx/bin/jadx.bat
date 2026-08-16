@@ -63,7 +63,7 @@ set CMD_LINE_ARGS=%*
 :execute
 @rem Setup the command line
 
-set CLASSPATH=%APP_HOME%\lib\jadx-1.5.5-all.jar
+set CLASSPATH=%APP_HOME%\lib\jadx-1.5.6-all.jar
 
 @rem Execute jadx
 "%JAVA_EXE%" %DEFAULT_JVM_OPTS% %JAVA_OPTS% %JADX_OPTS%  -cp "%CLASSPATH%" jadx.cli.JadxCLI %CMD_LINE_ARGS%

@@ -10,7 +10,14 @@ func TestGetRandomUserAgent(t *testing.T) {
 		t.Errorf("user_agents.txt should not be empty")
 	}
 
-	agents := strings.Split(userAgents, "\n")
+	raw := strings.Split(userAgents, "\n")
+	var agents []string
+	for _, a := range raw {
+		a = strings.TrimSpace(a)
+		if a != "" {
+			agents = append(agents, a)
+		}
+	}
 	for i := 0; i < 10; i++ {
 		ua := GetRandomUserAgent()
 

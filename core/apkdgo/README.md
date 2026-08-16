@@ -1,11 +1,13 @@
 # APK Downloader CLI
+[![Go](https://github.com/kiber-io/apkdgo/actions/workflows/go.yml/badge.svg)](https://github.com/kiber-io/apkdgo/actions/workflows/go.yml)
+[![CodeQL](https://github.com/kiber-io/apkdgo/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/kiber-io/apkdgo/actions/workflows/github-code-scanning/codeql)
 
 This project is a command-line tool for downloading APK files from various sources.
 
 ## Supported Sources:
 - ApkCombo
 - F-Droid
-- RuStore
+- RuStore (some apps may be unavailable from non-Russian IP addresses and appear as not found)
 - Nashstore (may not work for non-Russian IP addresses)
 - ApkPure (WIP)
 
@@ -18,9 +20,10 @@ apkd [flags]
 ### Flags
 
 - `--package`, `-p`:
-  Specify the package name(s) of the app(s) to download. Example:
+  Specify the package name(s) of the app(s) to download. You can optionally pin a specific version code using the format `<pkg>:<version code>`. Examples:
   ```bash
   apkd -p com.example.app
+  apkd -p com.example.app:123456
   ```
 
 - `--source`, `-s`:
@@ -29,10 +32,23 @@ apkd [flags]
   apkd -s apkpure -p com.example.app
   ```
 
+- `--config`:
+  Path to YAML config file. CLI flags override config values.
+  If not specified, apkd tries `~/.config/apkd/config.yml`. Example:
+  ```bash
+  apkd --config ./apkd.yaml -p com.example.app
+  ```
+
 - `--file`, `-f`:
-  Provide a file containing a list of package names. Example:
+  Provide a file containing a list of package names. Each line can be either `<pkg>` or `<pkg>:<version code>`. Example:
   ```bash
   apkd -f packages.txt
+  ```
+
+  Example `packages.txt`:
+  ```text
+  com.example.app
+  com.example.otherapp:123456
   ```
 
 - `--dev`:
@@ -59,6 +75,31 @@ apkd [flags]
   apkd -o app.apk -p com.example.app
   ```
 
+- `--proxy`:
+  Set a global proxy URL for all network traffic. Example:
+  ```bash
+  apkd --proxy http://127.0.0.1:8080 -p com.example.app
+  ```
+
+- `--source-proxy`:
+  Set proxy URL for a specific source in format `source=proxy-url` (can be repeated). Example:
+  ```bash
+  apkd --source-proxy rustore=http://127.0.0.1:8081 --source-proxy fdroid=http://127.0.0.1:8082 -p com.example.app
+  ```
+
+- `--workers`:
+  Number of worker goroutines for task processing. Must be greater than 0. Example:
+  ```bash
+  apkd --workers 5 -p com.example.app
+  ```
+
+- `--proxy-insecure`:
+  Skip TLS certificate verification for HTTPS requests sent through proxy.
+  Useful for debugging with intercepting proxies. Example:
+  ```bash
+  apkd --proxy http://127.0.0.1:8080 --proxy-insecure -p com.example.app
+  ```
+
 - `--verbose`, `-v`:
   Set verbosity level. Use `-v` or `-vv` for more detailed logs. Example:
   ```bash
@@ -83,6 +124,112 @@ Download an APK for a specific package from a specific source:
 ```bash
 apkd -p com.example.app -s apkpure -O ./downloads
 ```
+
+Download a specific version code:
+```bash
+apkd -p com.example.app:123456 -s fdroid -O ./downloads
+```
+
+Use global debug proxy:
+```bash
+apkd --proxy http://127.0.0.1:8080 -p org.fdroid.fdroid
+```
+
+Use source-specific proxy overrides:
+```bash
+apkd --proxy http://127.0.0.1:8080 --source-proxy rustore=http://127.0.0.1:8081 -p ru.vk.store
+```
+
+Use intercepting proxy with disabled TLS verification:
+```bash
+apkd --proxy http://127.0.0.1:8080 --proxy-insecure -p org.fdroid.fdroid
+```
+
+Use config defaults and override one value from CLI:
+```bash
+apkd --config ./apkd.yaml --proxy http://127.0.0.1:8080 -p org.fdroid.fdroid
+```
+
+## Configuration
+
+Config format is YAML. Current version is `2`. Precedence is:
+
+1. CLI flags
+2. Config values
+3. Built-in code defaults
+
+When a CLI flag overrides a config value, the tool logs it.
+Relative paths in config (for example `defaults.output_dir`) are resolved relative to the config file location.
+
+Default config lookup path (when `--config` is omitted):
+- `~/.config/apkd/config.yml`
+
+Example `apkd.yaml` (version 2):
+
+```yaml
+version: 2
+
+defaults:
+  sources: [rustore, fdroid]
+  output_dir: ./downloads
+  force: false
+  verbose: 1
+
+runtime:
+  workers: 3
+
+network:
+  timeout: 30s
+  retry:
+    max_attempts: 10
+    delay_ms: 1000
+    max_delay_ms: 10000
+    retry_status: [429, 500, 502, 503, 504]
+  proxy:
+    global: http://127.0.0.1:8080
+    insecure_skip_verify: false
+    per_source:
+      rustore: http://127.0.0.1:8081
+
+sources:
+  rustore:
+    app_version: "1.103.1.0"
+    app_version_code: "1103100"
+    headers:
+      User-Agent: "RuStore/1.103.1.0 ..."
+      ruStoreVerCode: "1103100"
+```
+
+### Config version 2 changes
+
+In version 2, source profile fields (`app_version`, `app_version_code`, `firmware_lang`, etc.) are placed directly under the source key instead of under a nested `profile:` key used in version 1:
+
+```yaml
+# version 1
+sources:
+  rustore:
+    profile:
+      app_version: "1.93.0.3"
+      app_version_code: "1093003"
+    headers:
+      User-Agent: "RuStore/1.93.0.3 ..."
+      ruStoreVerCode: "1093003"
+
+# version 2
+sources:
+  rustore:
+    app_version: "1.103.1.0"
+    app_version_code: "1103100"
+    headers:
+      User-Agent: "RuStore/1.103.1.0 ..."
+      ruStoreVerCode: "1103100"
+```
+
+Version 1 configs are still supported for backward compatibility and are automatically converted on load.
+
+### RuStore auto-update
+
+If no source config is provided for RuStore (or profile fields are left at their built-in defaults), the tool automatically fetches the latest RuStore app version on first request and updates the relevant headers. To pin a specific version, set `app_version` and `app_version_code` explicitly.
 
 ## License
 

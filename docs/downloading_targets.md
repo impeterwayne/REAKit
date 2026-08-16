@@ -1,52 +1,105 @@
 # Automated Target Downloader Guide
 
-This document describes how to configure and execute automated target APK downloads using **ARE_Kit** scripts and the bundled downloading binary.
+This guide describes how to configure and execute automated target APK downloads in **ARE_Kit** using the unified CLI and the bundled Go-based downloading binary (**`apkd`**).
 
 ---
 
-## 🚀 Downloading Engine Overview
+## Downloading Engine Overview
 
-Downloading applications manually is tedious and prone to version drift. `ARE_Kit` integrates a compiled Go-based downloading utility (**`apkd`**), located in `core/apkdgo/apkd.exe`. The Python orchestrator `scripts/download_targets.py` automates directory mapping and runs the download executable concurrently.
+Downloading Android applications manually from third-party app stores or web aggregators is slow, prone to version drift, and difficult to automate. `ARE_Kit` integrates a compiled Go-based downloading utility (**`apkd`**), located in `core/apkdgo/apkd.exe`, orchestrated directly by the `are download` command.
+
+```mermaid
+graph TD
+    User[User / Agent / Pipeline] -->|are dl / are download| CLI[ARE_Kit CLI Engine]
+    CLI --> Downloader[APK Downloader Engine]
+    Downloader --> Config[ConfigManager: workspace_config.json]
+    Downloader --> Engine[core/apkdgo/apkd.exe]
+    
+    Engine --> Sources{Download Sources}
+    Sources -->|Default / Fallback| ApkCombo[APKCombo]
+    Sources -->|F-Droid| FDroid[F-Droid]
+    Sources -->|RuStore| RuStore[RuStore]
+    Sources -->|NashStore| NashStore[NashStore]
+    
+    Engine --> Output["workspaces/<package_name>/apks/"]
+    Output --> Archive[Downloaded .apk / .xapk / .apks]
+    Downloader -->|Auto-Register New Target| Config
+```
 
 ---
 
-## 🛠️ Downloader Script (`download_targets.py`)
+## Downloading Targets via CLI (`are dl` / `are download`)
 
-The script reads target URLs or packages from files or parameters, resolves target namespaces, structures the folders, and downloads the binary packages directly into the respective target's `apks/` directory.
+The unified CLI command `are dl` reads targets directly from `workspace_config.json` or accepts targets on the command line, resolves package names and URLs, provisions target folders, and downloads packages directly into `workspaces/<package>/apks/`.
 
 ### Command-line Syntax
 
 ```bash
-python scripts/download_targets.py [options]
+are download [target] [options]
 ```
 
-### Argument Reference
+*Alias:* `are dl`
 
-| Flag | Long Option | Default | Description |
+### Options
+
+| Flag | Long Option | Description | Default |
 |---|---|---|---|
-| *None* | `--config` | `config/workspace_config.json` | Path to the global workspace configuration file. |
-| *None* | `--targets` | `config/targets.txt` | Path to targets list containing package names or download URLs. |
-| *None* | `--link` | *None* | Direct URL or package name to download on-demand (ignores `targets.txt`). |
-| *None* | `--apkd` | `core/apkdgo/apkd.exe` | Explicit path to the underlying `apkd.exe` binary. |
+| `-t` | `--target <pkg_or_alias>` | Target package name or configured alias | Active target / all |
+| `-l` | `--link <url_or_pkg>` | Direct Play Store URL or package name | None |
+| `-s` | `--source <provider>` | Download source (`apkcombo`, `fdroid`, `rustore`, `nashstore`) | `apkcombo` |
+| | `--targets <file>` | Path to custom targets text file | None |
+| `-w` | `--workspace <dir>` | Custom workspace root directory path | `./workspaces` |
+| `-c` | `--config <file>` | Path to workspace configuration file | `config/workspace_config.json` |
 
 ---
 
-## 🔄 Automatic Configuration Auto-Discovery
+### Practical Examples
 
-When you download a package that was not previously registered in the system, `download_targets.py` automatically updates `workspace_config.json`:
+#### 1. Download All Configured Targets
+Download packages for every target configured in `workspace_config.json`:
+```bash
+are dl
+```
 
-1. Detects new packages downloaded during execution.
-2. Extracts package endings (e.g. `com.lichess.mobileV2` -> `Mobilev2`).
-3. Appends an entry into `apps` array with `packageName` and `alias`.
-4. Writes updates back to `workspace_config.json` on exit.
+#### 2. Download a Specific Target by Package Name
+```bash
+are dl com.zodiac.horoscope.palmreader.scanpalmistry
+```
 
-This dynamic feature ensures newly fetched packages are immediately accessible by decompiler and sandbox tools without manual JSON entry.
+#### 3. Download from a Google Play Store URL
+Pass the Play Store URL directly (automatically extracts package ID and initializes workspace):
+```bash
+are dl "https://play.google.com/store/apps/details?id=com.zodiac.horoscope.palmreader.scanpalmistry"
+```
+
+#### 4. Specify a Download Source Repository
+Download from alternative app repositories such as F-Droid, RuStore, or NashStore:
+```bash
+# Download from F-Droid
+are dl org.lichess.mobileV2 -s fdroid
+
+# Download from RuStore
+are dl ru.vk.store -s rustore
+```
 
 ---
 
-## ⚙️ Downloader Engine Reference (`apkd.exe`)
+## Automatic Target Registration
 
-The downloader is powered by the custom Go binary `apkd.exe`. 
+When you download a package that was not previously registered in `workspace_config.json`, `ARE_Kit` automatically registers it:
+
+1. **Detection:** Identifies new package IDs from CLI arguments or Play Store URLs.
+2. **Alias Generation:** Derives a clean, readable alias (e.g. `com.lichess.mobileV2` -> `Mobilev2`).
+3. **Configuration Persistence:** Appends the target entry to the `"targets"` array in `workspace_config.json`.
+4. **Workspace Provisioning:** Initializes directory trees (`apks/`, `jadx_src/`, `docs/`, `runtime/`) on the fly.
+
+This ensures newly fetched packages are immediately accessible by decompiler and runtime tools without manual JSON editing.
+
+---
+
+## Downloader Engine Reference (`apkd.exe`)
+
+The core downloader is powered by the bundled Go binary in `core/apkdgo/apkd.exe`.
 
 ### Standalone CLI Arguments
 
@@ -68,23 +121,15 @@ Flags:
       --workers int         number of worker goroutines (default 3)
 ```
 
+
+
 ---
 
-## 📖 Practical Examples
+## Troubleshooting & Network Tips
 
-### Example 1: Download from Target file
-Processes all URLs in `config/targets.txt` and downloads packages:
-
-```bash
-python scripts/download_targets.py --config config/workspace_config.json --targets config/targets.txt
-```
-
-### Example 2: Download a single target on-demand
-Downloads a package and adds it to workspace configuration without editing `targets.txt`:
-
-```bash
-python scripts/download_targets.py --link com.whatsapp
-```
-
-> [!WARNING]
-> Ensure you have adequate internet access during download. Some sources might utilize IP geoblocking or cloudflare checks. If you run into issues, try using the `--proxy` configuration options directly on the underlying `apkd.exe` tool.
+1. **Network Timeout or Cloudflare Block:**
+   Some aggregators rate-limit aggressive downloads. If downloads stall, verify your internet connection or use a proxy.
+2. **App Not Found on Source:**
+   If an app is not available on `apkcombo`, try switching sources with `-s fdroid` or `-s rustore`.
+3. **Force Redownload:**
+   If an APK archive is incomplete or corrupted, run the download with force flag or remove the existing file in `workspaces/<package>/apks/`.

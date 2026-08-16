@@ -1,98 +1,232 @@
 # Bytecode Decompilation & JADX Guide
 
-This guide covers the static decompilation workflow in **ARE_Kit**, which converts raw Android application archives into navigable Java codebases and Gradle projects.
+This guide covers the static decompilation and bytecode analysis architecture in **ARE_Kit**, which converts raw Android application packages (`.apk`, `.xapk`, `.apks`) into navigable, structured Java source codebases and Android Studio-ready Gradle projects.
 
 ---
 
-## 🔍 Decompilation Orchestrator (`decode_targets.py`)
+## Decompilation Pipeline Architecture
 
-Decompiling modern Android apps can be resource-heavy and complex. The script `scripts/decode_targets.py` manages execution parameters, allocates memory safeguards, detects system capabilities, handles package variations, and runs the open-source **JADX** decompiler.
-
-### Command-line Syntax
-
-```bash
-python scripts/decode_targets.py [options]
-```
-
-### Argument Reference
-
-| Flag | Long Option | Default | Description |
-|---|---|---|---|
-| *None* | `--config` | `config/workspace_config.json` | Path to the global workspace configuration file. |
-| *None* | `--targets` | `config/targets.txt` | Path to the targets list containing package names or links. |
-| *None* | `--link` | *None* | Decompile a single direct package name or package link (ignores `targets.txt`). |
-
----
-
-## ⚡ Multi-threading & Out-of-Memory (OOM) Safeguards
-
-Large apps often crash standard JADX processes due to heap limits. `decode_targets.py` implements the following environment safeguards:
-
-1. **Aggressive Heap Reservation:**
-   The script checks if `JADX_OPTS` is defined in the system. If absent, it automatically forces a high memory limit:
-   ```bash
-   JADX_OPTS="-Xmx8g -Xms8g"
-   ```
-   This reserves 8 GB of JVM heap memory, preventing Out-Of-Memory exceptions during resource-heavy decompilations.
-
-2. **Dynamic CPU Core Allocation:**
-   The script automatically queries the CPU core configuration (`os.cpu_count()`) and forwards this value to the JADX threading argument (`-j <cores>`). This ensures the CPU is fully leveraged during parallel decompilation phases.
-
----
-
-## 🛡️ JADX Configuration & Analysis Flags
-
-The script applies specific analysis flags to ensure code readability and accuracy for security reviews:
-
-```text
---export-gradle                       # Generates an Android Studio-ready Gradle project layout
---deobf                               # Renames obfuscated (a, b, c) symbols into unique names
---add-debug-lines                     # Restores debug line comments inside decompiled classes
---comments-level debug                # Adds warnings, errors, and parsing issues directly in source files
---respect-bytecode-access-modifiers   # Retains original class/method visibilities (public, private)
---no-inline-anonymous                 # Prevents inlining anonymous classes to isolate call logic
---no-inline-methods                   # Prevents inlining method bodies to preserve signature references
---no-replace-consts                   # Keeps raw constants intact instead of matching them against constants definitions
-```
-
----
-
-## 📦 Multi-APK split installations (`.xapk` and `.apks`)
-
-Modern applications on the Play Store are often delivered as Split APKs (app bundles) which cannot be parsed in isolation. `decode_targets.py` automatically detects and processes these archives:
-
-1. **Auto-Detection:** Identifies files ending with `.xapk` or `.apks` inside the target's `apks/` directory.
-2. **Extraction:** Recursively unpacks the zip archives into a temporary `_extracted/` directory.
-3. **Split Aggregation:** Gathers the `base.apk` alongside all auxiliary localized splits (e.g. `split_config.arm64_v8a.apk`, `split_config.en.apk`).
-4. **Unified Merging:** Executes JADX with the entire list of split APK paths, generating a single, cleanly reconstructed Java codebase.
+`ARE_Kit` integrates **JADX v1.5.6+** and **APKTool** within a unified orchestration layer. It automatically handles archive extraction, multi-APK split bundle aggregation, CPU-aware multi-threading, and JVM memory allocation safeguards.
 
 ```mermaid
 graph TD
-    A[Package.xapk] --> B(zipfile Extraction)
-    B --> C[base.apk]
-    B --> D[split_arm64.apk]
-    B --> E[split_en.apk]
-    C & D & E --> F[JADX Compiler Merge]
-    F --> G[Unified jadx_src Output]
+    subgraph Input ["Application Archives"]
+        APK[Standard .apk]
+        XAPK[Split Bundle .xapk / .apks]
+    end
+
+    subgraph Extraction ["Archive & Split Processor"]
+        XAPK -->|Unpack Zip| Extracted["_extracted/ Directory"]
+        Extracted --> Base[base.apk]
+        Extracted --> Splits[split_config.arm64.apk<br/>split_config.en.apk<br/>split_config.xxhdpi.apk]
+    end
+
+    subgraph Decompiler ["ARE_Kit Decompiler Engine"]
+        APK --> Engine[JADX Decompilation Engine]
+        Base & Splits -->|Unified Multi-APK Feed| Engine
+        
+        Safeguards[JVM Heap Safeguard: -Xmx8g<br/>Thread Concurrency: CPU Cores] --> Engine
+        Flags[Analysis & Security Flags:<br/>--export-gradle, --deobf, --add-debug-lines,<br/>--no-inline-methods, --no-inline-anonymous] --> Engine
+    end
+
+    subgraph Output ["Target Workspace Layout"]
+        Engine --> OutputDir["workspaces/<package_name>/jadx_src/"]
+        OutputDir --> Src["app/src/main/java/ (Reconstructed Classes)"]
+        OutputDir --> Res["app/src/main/resources/ & AndroidManifest.xml"]
+        OutputDir --> Gradle["build.gradle (Android Studio Importable)"]
+    end
 ```
 
 ---
 
-## 📖 Practical Examples
+## Decompilation via CLI (`are decode` / `are decompile`)
 
-### Example 1: Decompile target packages from config
-Decompile all packages configured in your workspace:
+The `are decode` command reads packages from your active workspace, unpacks multi-APK splits, optimizes JVM memory parameters, and decompiles classes into `workspaces/<package>/jadx_src/`.
 
-```bash
-python scripts/decode_targets.py --config config/workspace_config.json
-```
-
-### Example 2: Decompile a single target by package name
-Decompile a single package on demand:
+### Command Syntax
 
 ```bash
-python scripts/decode_targets.py --link com.lichess.mobileV2
+are decode [target] [options]
 ```
 
-> [!IMPORTANT]
-> Make sure to install a Java Development Kit (JDK) 11 or higher. JADX relies entirely on a JVM to operate. If JADX is not found in the `core/jadx/bin/` workspace subdirectory, the script will fall back to executing `jadx` from your system `PATH`.
+*Alias:* `are decompile`
+
+### Options
+
+| Flag | Long Option | Description | Default |
+|---|---|---|---|
+| `-t` | `--target <pkg_or_alias>` | Target package name or configured alias | Active target / all |
+| `-l` | `--link <url_or_pkg>` | Direct Play Store URL or package name | None |
+| `-j` | `--threads <n>` | Worker thread count for parallel processing | Auto-detect (`os.cpu_count()`) |
+| | `--heap <size>` | JVM Heap allocation memory limit | `8g` |
+| `-w` | `--workspace <dir>` | Custom workspace root directory path | `./workspaces` |
+| `-c` | `--config <file>` | Path to workspace configuration file | `config/workspace_config.json` |
+| | `--targets <file>` | Custom plain text file containing package names | None |
+
+---
+
+### Practical Examples
+
+#### 1. Decompile All Configured Targets
+Decompile every target defined in your `workspace_config.json`:
+```bash
+are decode
+```
+
+#### 2. Decompile a Specific Target Package
+Target a specific app by its Android package identifier:
+```bash
+are decode com.zodiac.horoscope.palmreader.scanpalmistry
+```
+
+#### 3. Decompile Using a Friendly Alias
+Use an alias configured in `workspace_config.json`:
+```bash
+are decode -t Scanpalmistry
+```
+
+#### 4. Decompile from a Google Play Store URL
+Pass a direct store link (automatically parses the package name):
+```bash
+are decode "https://play.google.com/store/apps/details?id=com.zodiac.horoscope.palmreader.scanpalmistry"
+```
+
+#### 5. High-Performance / High-Memory Tuning
+For massive enterprise apps (50MB+ DEX code), assign custom thread count and allocate 16 GB of JVM heap memory:
+```bash
+are decode -t Scanpalmistry -j 16 --heap 16g
+```
+
+---
+
+## Interactive JADX GUI (`are jadx-gui`)
+
+For interactive reverse engineering, graph viewing, class searching, and live decompilation inspection, `ARE_Kit` provides direct integration with the graphical JADX GUI.
+
+```bash
+# Launch empty JADX GUI
+are jadx-gui
+
+# Launch JADX GUI and automatically open the target's APK
+are jadx-gui com.zodiac.horoscope.palmreader.scanpalmistry
+
+# Launch JADX GUI using target alias
+are jadx-gui -t Scanpalmistry
+```
+
+> [!TIP]
+> When a target package or alias is provided, `are jadx-gui` automatically inspects `workspaces/<package>/apks/` and loads the primary APK file directly into the editor.
+
+---
+
+## Low-Level Smali & Resource Inspection (`are apktool`)
+
+When you need direct Smali disassembly, manifest editing, or raw resource decompilation and rebuilding, use the bundled APKTool wrapper:
+
+```bash
+# Disassemble an APK to Smali and raw resources
+are apktool d workspaces/com.example.app/apks/base.apk -o workspaces/com.example.app/smali_out
+
+# Reassemble / Rebuild an APK from modified Smali sources
+are apktool b workspaces/com.example.app/smali_out -o workspaces/com.example.app/rebuilt_app.apk
+```
+
+---
+
+## Multi-APK Split Installations (`.xapk` & `.apks`)
+
+Modern applications on Google Play are commonly published as **Android App Bundles (AAB)** and distributed to devices as **Split APKs** (`.xapk` or `.apks` archives). Individual split APKs contain only partial bytecode and assets (such as ABI-specific native libraries `arm64-v8a` or language-specific string tables).
+
+`ARE_Kit` manages this automatically:
+
+1. **Auto-Detection:** Detects `.xapk` and `.apks` archives inside `workspaces/<package>/apks/`.
+2. **Recursive Extraction:** Unpacks the archive into a dedicated `<archive_name>_extracted/` directory.
+3. **Split Aggregation:** Gathers `base.apk` alongside all auxiliary split files (`split_config.arm64_v8a.apk`, `split_config.en.apk`, etc.).
+4. **Unified Merging:** Invokes JADX with all discovered APK paths passed simultaneously in a single command, producing a unified, coherent Java codebase.
+
+---
+
+## JADX Decompiler Flags & Security Optimization
+
+`ARE_Kit` applies specialized decompiler flags tuned for security reviews, malware auditing, and code readability:
+
+| Flag | Purpose & Impact |
+|---|---|
+| `--export-gradle` | Generates a standard Android Studio Gradle project structure (`build.gradle`, `app/src/main/...`) for direct IDE import. |
+| `--deobf` | Activates deobfuscation engine to rename short obfuscated identifiers (`a`, `b`, `c`) into readable unique aliases (`f1234a`). |
+| `--add-debug-lines` | Injects original bytecode line numbers as comments (`// line 42`) to enable exact mapping against stack traces and Frida hook points. |
+| `--comments-level debug` | Adds compiler warnings, type inference errors, and bytecode offsets directly into generated Java files for deeper analysis. |
+| `--respect-bytecode-access-modifiers` | Retains original class, method, and field visibilities (`private`, `protected`, `package-private`) rather than artificially converting them to `public`. |
+| `--no-inline-anonymous` | Prevents inlining of anonymous inner classes (e.g. `Runnable`, `OnClickListener`) to keep callback logic distinct and searchable. |
+| `--no-inline-methods` | Disables method inlining to preserve exact method signatures, call hierarchies, and cross-reference graphs. |
+| `--no-replace-consts` | Retains original integer and string constant values rather than replacing them with mismatched constant names from external libraries. |
+
+---
+
+## Memory Management & Out-of-Memory (OOM) Safeguards
+
+Decompiling complex Android applications with multiple DEX files can consume substantial JVM heap space. `ARE_Kit` implements the following safeguards:
+
+### 1. Automatic JVM Heap Reservation
+The decompiler checks for the `JADX_OPTS` environment variable. If not explicitly set by the user, it assigns:
+```bash
+JADX_OPTS="-Xmx8g -Xms8g"
+```
+You can customize this per command using the `--heap` flag (e.g. `--heap 12g` or `--heap 16g`).
+
+### 2. Dynamic CPU Core Allocation
+The engine queries the host machine's hardware threads via `os.cpu_count()` and forwards this value to JADX via `-j <cores>`. This accelerates decompilation across all available CPU threads without manual tuning.
+
+---
+
+## Output Workspace Directory Structure
+
+Following decompilation, your target workspace folder is populated as follows:
+
+```text
+workspaces/com.zodiac.horoscope.palmreader.scanpalmistry/
+├── apks/                                      # Downloaded APK / XAPK files
+│   ├── com.zodiac.horoscope.palmreader.xapk
+│   └── com.zodiac.horoscope.palmreader.xapk_extracted/
+│       ├── base.apk
+│       ├── split_config.arm64_v8a.apk
+│       └── split_config.en.apk
+├── jadx_src/                                  # Decompiled Java Gradle Project
+│   ├── app/
+│   │   ├── build.gradle                       # Gradle subproject configuration
+│   │   └── src/
+│   │       └── main/
+│   │           ├── AndroidManifest.xml        # Reconstructed Application Manifest
+│   │           ├── java/                      # Decompiled Java classes (.java)
+│   │           └── resources/                 # Decoded assets and resources
+│   ├── build.gradle                           # Root Gradle build script
+│   └── settings.gradle                        # Gradle project settings
+└── runtime/                                   # Extracted device runtime data (ADB)
+    ├── databases/                             # SQLite databases
+    └── shared_prefs/                          # XML preferences
+```
+
+
+
+---
+
+## Troubleshooting & FAQs
+
+### 1. Java Out-Of-Memory (`java.lang.OutOfMemoryError`)
+* **Cause:** The target APK contains hundreds of classes or heavy multidex archives exceeding JVM heap memory.
+* **Fix:** Increase heap allocation using the `--heap` argument:
+  ```bash
+  are decode com.example.app --heap 16g
+  ```
+
+### 2. `jadx` or `java` is not recognized
+* **Cause:** Java Development Kit (JDK 11+) is missing or not registered in your `PATH`.
+* **Fix:** Verify your environment setup with `are env`, install a modern JDK (such as OpenJDK 17 or 21), and run `are install` to register bundled binaries.
+
+### 3. Corrupted Split Archive (`zipfile.BadZipFile`)
+* **Cause:** The downloaded `.xapk` or `.apks` was truncated during download.
+* **Fix:** Re-download the target using `are dl <target> -F` (force overwrite), then re-run `are decode <target>`.
+
+### 4. Decompilation of Kotlin Coroutines or Lambdas Produces Incomplete Code
+* **Cause:** Obfuscators (R8 / ProGuard) strip variable names and fold lambda structures.
+* **Fix:** Launch the interactive GUI (`are jadx-gui -t <target>`) to inspect bytecode mappings or toggle decompilation modes (`restructure` vs `simple` vs `fallback`).

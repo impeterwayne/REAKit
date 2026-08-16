@@ -1,0 +1,3 @@
+[submodule "core/scrcpy_cli"]
+	path = core/scrcpy_cli
+	url = https://github.com/impeterwayne/scrcpy_cli.git

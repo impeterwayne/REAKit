@@ -3,30 +3,54 @@ package network
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand"
 	"net"
 	"net/http"
+	"net/url"
 	"slices"
+	"strings"
+	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
-	"github.com/kiber-io/apkd/apkd/logger"
+	"github.com/kiber-io/apkd/apkd/logging"
 )
 
 var reqSeq uint64
+var logger = logging.Named("network")
+var proxyConfigMu sync.RWMutex
+var clientDefaultsMu sync.RWMutex
+var globalProxyURL *url.URL
+var sourceProxyURLs = map[string]*url.URL{}
+var proxyInsecureSkipVerify bool
+var defaultClientTimeout = 30 * time.Second
+var defaultRetryPolicy = DefaultRetryPolice()
 
-func nextRequestID() string {
+func nextRequestID() uint64 {
 	n := atomic.AddUint64(&reqSeq, 1)
-	return fmt.Sprintf("req-%d", n)
+	return n
 }
 
 type Doer interface {
 	Do(req *http.Request) (*http.Response, error)
 }
 
+type DefaultHeadersConfigurer interface {
+	SetDefaultHeaders(headers http.Header) *Client
+	UpdateDefaultHeaders(headers http.Header) *Client
+	DefaultHeaders() http.Header
+}
+
 type retryIfCtxKey struct{}
+type requestModuleCtxKey struct{}
+type requestLoggerCtxKey struct{}
+type withoutClientTimeoutCtxKey struct{}
+type checkRedirectCtxKey struct{}
 
 type RetryDecision uint8
 
@@ -48,29 +72,68 @@ type RetryPolice struct {
 
 func DefaultRetryPolice() *RetryPolice {
 	return &RetryPolice{
-		MaxAttempts: 3,
+		MaxAttempts: 10,
 		Delay:       1000, // milliseconds
 		MaxDelay:    10000,
 		RetryStatus: []int{http.StatusTooManyRequests, http.StatusInternalServerError, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout},
 	}
 }
 
+func cloneRetryPolicy(policy *RetryPolice) *RetryPolice {
+	if policy == nil {
+		return nil
+	}
+	cloned := *policy
+	cloned.RetryStatus = append([]int(nil), policy.RetryStatus...)
+	return &cloned
+}
+
 type Client struct {
 	doer           Doer
 	retry          *RetryPolice
 	defaultHeaders http.Header
+	defaultMu      sync.RWMutex
 }
 
 func DefaultClient() *Client {
-	return NewHttpClient(30*time.Second, DefaultRetryPolice())
+	return NewHttpClientForSource("", 0, nil)
+}
+
+func DefaultClientForSource(sourceName string) *Client {
+	return NewHttpClientForSource(sourceName, 0, nil)
 }
 
 func NewHttpClient(timeout time.Duration, p *RetryPolice) *Client {
-	base := &http.Client{
-		Timeout: timeout,
+	return NewHttpClientForSource("", timeout, p)
+}
+
+func NewHttpClientForSource(sourceName string, timeout time.Duration, p *RetryPolice) *Client {
+	if timeout <= 0 {
+		timeout = currentClientTimeout()
 	}
 	if p == nil {
-		p = DefaultRetryPolice()
+		p = currentRetryPolicy()
+	}
+	proxyURL := resolveProxyURL(sourceName)
+	baseTransport, ok := http.DefaultTransport.(*http.Transport)
+	if !ok {
+		baseTransport = &http.Transport{}
+	}
+	transport := baseTransport.Clone()
+	if proxyURL != nil {
+		transport.Proxy = http.ProxyURL(proxyURL)
+		if isProxyInsecureSkipVerifyEnabled() {
+			if transport.TLSClientConfig == nil {
+				transport.TLSClientConfig = &tls.Config{}
+			}
+			transport.TLSClientConfig.InsecureSkipVerify = true
+		}
+	} else {
+		transport.Proxy = http.ProxyFromEnvironment
+	}
+	base := &http.Client{
+		Timeout:   timeout,
+		Transport: transport,
 	}
 	return &Client{
 		doer:  base,
@@ -78,9 +141,191 @@ func NewHttpClient(timeout time.Duration, p *RetryPolice) *Client {
 	}
 }
 
+func ConfigureProxies(globalProxy string, sourceProxies map[string]string, insecureSkipVerify bool) error {
+	var parsedGlobalProxy *url.URL
+	if trimmedGlobal := strings.TrimSpace(globalProxy); trimmedGlobal != "" {
+		var err error
+		parsedGlobalProxy, err = parseProxyURL(trimmedGlobal)
+		if err != nil {
+			return fmt.Errorf("invalid global proxy: %w", err)
+		}
+	}
+	parsedSourceProxies := make(map[string]*url.URL, len(sourceProxies))
+	for sourceName, rawProxyURL := range sourceProxies {
+		normalizedSourceName := strings.ToLower(strings.TrimSpace(sourceName))
+		if normalizedSourceName == "" {
+			return errors.New("source name cannot be empty in source proxy map")
+		}
+		trimmedProxyURL := strings.TrimSpace(rawProxyURL)
+		if trimmedProxyURL == "" {
+			continue
+		}
+		parsedSourceProxy, err := parseProxyURL(trimmedProxyURL)
+		if err != nil {
+			return fmt.Errorf("invalid proxy for source %s: %w", normalizedSourceName, err)
+		}
+		parsedSourceProxies[normalizedSourceName] = parsedSourceProxy
+	}
+	proxyConfigMu.Lock()
+	if parsedGlobalProxy != nil {
+		logger.Logd(fmt.Sprintf("Configured global proxy: %v", parsedGlobalProxy))
+	}
+	globalProxyURL = parsedGlobalProxy
+	if len(parsedSourceProxies) > 0 {
+		logger.Logd(fmt.Sprintf("Configured source proxies: %v", parsedSourceProxies))
+	}
+	sourceProxyURLs = parsedSourceProxies
+	if insecureSkipVerify {
+		logger.Logd(fmt.Sprintf("Configured proxy insecure skip verify: %v", insecureSkipVerify))
+	}
+	proxyInsecureSkipVerify = insecureSkipVerify
+	proxyConfigMu.Unlock()
+	return nil
+}
+
+func ResetClientDefaults() {
+	clientDefaultsMu.Lock()
+	defaultClientTimeout = 30 * time.Second
+	defaultRetryPolicy = DefaultRetryPolice()
+	clientDefaultsMu.Unlock()
+}
+
+func ConfigureClientDefaults(timeout *time.Duration, retryPolicy *RetryPolice) error {
+	if timeout != nil && *timeout <= 0 {
+		return errors.New("timeout must be > 0")
+	}
+	if retryPolicy != nil {
+		if retryPolicy.MaxAttempts <= 0 {
+			return errors.New("retry max attempts must be > 0")
+		}
+		if retryPolicy.Delay < 0 {
+			return errors.New("retry delay must be >= 0")
+		}
+		if retryPolicy.MaxDelay < 0 {
+			return errors.New("retry max delay must be >= 0")
+		}
+		for _, retryStatusCode := range retryPolicy.RetryStatus {
+			if retryStatusCode < 100 || retryStatusCode > 599 {
+				return fmt.Errorf("invalid retry status code %d", retryStatusCode)
+			}
+		}
+	}
+
+	clientDefaultsMu.Lock()
+	if timeout != nil {
+		defaultClientTimeout = *timeout
+	}
+	if retryPolicy != nil {
+		defaultRetryPolicy = cloneRetryPolicy(retryPolicy)
+	}
+	clientDefaultsMu.Unlock()
+	return nil
+}
+
+func cloneHeaders(headers http.Header) http.Header {
+	if headers == nil {
+		return http.Header{}
+	}
+	cloned := make(http.Header, len(headers))
+	for headerName, values := range headers {
+		cloned[headerName] = append([]string(nil), values...)
+	}
+	return cloned
+}
+
+func currentClientTimeout() time.Duration {
+	clientDefaultsMu.RLock()
+	defer clientDefaultsMu.RUnlock()
+	return defaultClientTimeout
+}
+
+func currentRetryPolicy() *RetryPolice {
+	clientDefaultsMu.RLock()
+	defer clientDefaultsMu.RUnlock()
+	return cloneRetryPolicy(defaultRetryPolicy)
+}
+
+func parseProxyURL(rawProxyURL string) (*url.URL, error) {
+	proxyURL, err := url.Parse(rawProxyURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse proxy URL: %w", err)
+	}
+	if proxyURL.Scheme == "" || proxyURL.Host == "" {
+		return nil, errors.New("proxy URL must include scheme and host")
+	}
+	return proxyURL, nil
+}
+
+func resolveProxyURL(sourceName string) *url.URL {
+	normalizedSourceName := strings.ToLower(strings.TrimSpace(sourceName))
+	proxyConfigMu.RLock()
+	defer proxyConfigMu.RUnlock()
+	if normalizedSourceName != "" {
+		if sourceProxyURL, exists := sourceProxyURLs[normalizedSourceName]; exists {
+			return sourceProxyURL
+		}
+	}
+	return globalProxyURL
+}
+
+func isProxyInsecureSkipVerifyEnabled() bool {
+	proxyConfigMu.RLock()
+	defer proxyConfigMu.RUnlock()
+	return proxyInsecureSkipVerify
+}
+
 func (c *Client) WithDefaultHeaders(headers http.Header) *Client {
-	c.defaultHeaders = headers
+	c.SetDefaultHeaders(headers)
 	return c
+}
+
+func (c *Client) SetDefaultHeaders(headers http.Header) *Client {
+	c.defaultMu.Lock()
+	c.defaultHeaders = cloneHeaders(headers)
+	c.defaultMu.Unlock()
+	return c
+}
+
+func (c *Client) UpdateDefaultHeaders(headers http.Header) *Client {
+	if len(headers) == 0 {
+		return c
+	}
+	c.defaultMu.Lock()
+	if c.defaultHeaders == nil {
+		c.defaultHeaders = make(http.Header, len(headers))
+	}
+	for key, values := range headers {
+		c.defaultHeaders[key] = append([]string(nil), values...)
+	}
+	c.defaultMu.Unlock()
+	return c
+}
+
+func (c *Client) DisableHTTP2() *Client {
+	if base, ok := c.doer.(*http.Client); ok {
+		if t, ok := base.Transport.(*http.Transport); ok {
+			t.ForceAttemptHTTP2 = false
+			t.TLSClientConfig.NextProtos = []string{"http/1.1"}
+			t.TLSNextProto = make(map[string]func(string, *tls.Conn) http.RoundTripper)
+			t.TLSHandshakeTimeout = 10 * time.Second
+		}
+	}
+	return c
+}
+
+func (c *Client) DefaultHeaders() http.Header {
+	c.defaultMu.RLock()
+	defer c.defaultMu.RUnlock()
+	return cloneHeaders(c.defaultHeaders)
+}
+
+func UpdateDoerDefaultHeaders(doer Doer, headers http.Header) error {
+	configurer, ok := doer.(DefaultHeadersConfigurer)
+	if !ok {
+		return fmt.Errorf("doer %T does not support default headers configuration", doer)
+	}
+	configurer.UpdateDefaultHeaders(headers)
+	return nil
 }
 
 func (c *Client) WithRetryIf(decider RetryDecider) *Client {
@@ -94,7 +339,7 @@ func defaultRetryDecider(retryStatuses []int) RetryDecider {
 			return RetryNo
 		}
 		if err != nil {
-			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+			if isRetryableTransportError(err) {
 				return RetryYes
 			}
 			return RetryNo
@@ -106,17 +351,36 @@ func defaultRetryDecider(retryStatuses []int) RetryDecider {
 	}
 }
 
+func isRetryableTransportError(err error) bool {
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return true
+	}
+	if errors.Is(err, syscall.ENETUNREACH) || errors.Is(err, syscall.EHOSTUNREACH) || errors.Is(err, syscall.ENETDOWN) {
+		return true
+	}
+	return false
+}
+
 func (c *Client) Do(req *http.Request) (*http.Response, error) {
 	var lastErr error
 	reqId := nextRequestID()
-	if c.defaultHeaders != nil {
-		for key, values := range c.defaultHeaders {
+	module := requestModuleFromRequest(req)
+	reqLogger := requestLoggerFromRequest(req)
+	activeLogger := logger
+	if reqLogger != nil {
+		activeLogger = reqLogger
+	}
+	logContext := requestLogContext(reqId, module)
+	defaultHeaders := c.DefaultHeaders()
+	if defaultHeaders != nil {
+		for key, values := range defaultHeaders {
 			for _, value := range values {
 				req.Header.Add(key, value)
 			}
 		}
 	}
-	logger.Logd(fmt.Sprintf("[%s] Sending request: %s %s", reqId, req.Method, req.URL.String()))
+	activeLogger.Logd(fmt.Sprintf("%s Sending request: %s %s", logContext, req.Method, req.URL.String()))
 	defDecider := defaultRetryDecider(c.retry.RetryStatus)
 	decider := c.retry.RetryIf
 	if reqDecider := retryIfFromRequest(req); reqDecider != nil {
@@ -134,22 +398,44 @@ func (c *Client) Do(req *http.Request) (*http.Response, error) {
 		}
 		return d == RetryYes
 	}
+	effectiveDoer := c.doer
+	if withoutClientTimeoutFromRequest(req) {
+		if baseHTTPClient, ok := c.doer.(*http.Client); ok && baseHTTPClient.Timeout > 0 {
+			httpClientWithoutTimeout := *baseHTTPClient
+			httpClientWithoutTimeout.Timeout = 0
+			effectiveDoer = &httpClientWithoutTimeout
+		}
+	}
+	if baseHTTPClient, ok := effectiveDoer.(*http.Client); ok {
+		if checkRedirect := checkRedirectFromRequest(req); checkRedirect != nil {
+			httpClientWithCheckRedirect := *baseHTTPClient
+			httpClientWithCheckRedirect.CheckRedirect = checkRedirect
+			effectiveDoer = &httpClientWithCheckRedirect
+		}
+	}
 
 	for attempt := 1; attempt <= c.retry.MaxAttempts; attempt++ {
-		resp, err := c.doer.Do(req)
+		resp, err := effectiveDoer.Do(req)
 		if err == nil {
-			logger.Logd(fmt.Sprintf("[%s] Received response: %d %s", reqId, resp.StatusCode, http.StatusText(resp.StatusCode)))
+			activeLogger.Logd(fmt.Sprintf("%s Received response: %d %s", logContext, resp.StatusCode, http.StatusText(resp.StatusCode)))
 		} else {
-			logger.Logd(fmt.Sprintf("[%s] Request error: %v", reqId, err))
+			activeLogger.Logd(fmt.Sprintf("%s Request error: %v", logContext, err))
 		}
 		if !shouldRetry(resp, err, attempt) {
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("request failed: %w", err)
 			}
 			return resp, nil
 		}
+		if resp != nil && resp.Body != nil {
+			if closeErr := resp.Body.Close(); closeErr != nil {
+				activeLogger.Logd(fmt.Sprintf("%s Failed to close response body before retry: %v", logContext, closeErr))
+			}
+		}
 		if err != nil {
 			lastErr = err
+		} else if resp != nil {
+			lastErr = fmt.Errorf("request failed: status %d", resp.StatusCode)
 		}
 		reason := "unknown reason"
 		if err != nil {
@@ -159,21 +445,23 @@ func (c *Client) Do(req *http.Request) (*http.Response, error) {
 		}
 
 		delay := backoffWithJitter(c.retry.Delay, c.retry.MaxDelay, attempt)
-		logger.Logw(fmt.Sprintf("[%s] Attempt %d/%d failed with %s, retrying in %v...", reqId, attempt, c.retry.MaxAttempts, reason, delay))
+		activeLogger.Logw(fmt.Sprintf("%s Attempt %d/%d failed with %s, retrying in %v...", logContext, attempt, c.retry.MaxAttempts, reason, delay))
+		timer := time.NewTimer(delay)
 		select {
-		case <-time.After(delay):
+		case <-timer.C:
 		case <-req.Context().Done():
-			return nil, req.Context().Err()
+			timer.Stop()
+			return nil, fmt.Errorf("request context done: %w", req.Context().Err())
 		}
 	}
 
 	return nil, lastErr
 }
 
-func (c *Client) Post(url string, body io.Reader) (*http.Response, error) {
-	req, err := http.NewRequest(http.MethodPost, url, body)
+func (c *Client) Post(rawURL string, body io.Reader) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, rawURL, body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create POST request: %w", err)
 	}
 	return c.Do(req)
 }
@@ -181,6 +469,30 @@ func (c *Client) Post(url string, body io.Reader) (*http.Response, error) {
 func WithRequestRetryIf(req *http.Request, decider RetryDecider) *http.Request {
 	ctx := context.WithValue(req.Context(), retryIfCtxKey{}, decider)
 	return req.WithContext(ctx)
+}
+
+func WithoutClientTimeout(req *http.Request) *http.Request {
+	if req == nil {
+		return nil
+	}
+	ctx := context.WithValue(req.Context(), withoutClientTimeoutCtxKey{}, true)
+	return req.WithContext(ctx)
+}
+
+func WithCheckRedirect(req *http.Request, fn func(req *http.Request, via []*http.Request) error) *http.Request {
+	if req == nil {
+		return nil
+	}
+	ctx := context.WithValue(req.Context(), checkRedirectCtxKey{}, fn)
+	return req.WithContext(ctx)
+}
+
+func WithModule(ctx context.Context, module string) context.Context {
+	return context.WithValue(ctx, requestModuleCtxKey{}, module)
+}
+
+func WithLogger(ctx context.Context, reqLogger *logging.Logger) context.Context {
+	return context.WithValue(ctx, requestLoggerCtxKey{}, reqLogger)
 }
 
 func retryIfFromRequest(req *http.Request) RetryDecider {
@@ -192,7 +504,62 @@ func retryIfFromRequest(req *http.Request) RetryDecider {
 	return nil
 }
 
-func backoffWithJitter(baseDelay, maxDelay int, attempt int) time.Duration {
+func withoutClientTimeoutFromRequest(req *http.Request) bool {
+	if req == nil {
+		return false
+	}
+	if val := req.Context().Value(withoutClientTimeoutCtxKey{}); val != nil {
+		if withoutTimeout, ok := val.(bool); ok {
+			return withoutTimeout
+		}
+	}
+	return false
+}
+
+func checkRedirectFromRequest(req *http.Request) func(req *http.Request, via []*http.Request) error {
+	if req == nil {
+		return nil
+	}
+	if val := req.Context().Value(checkRedirectCtxKey{}); val != nil {
+		if checkRedirect, ok := val.(func(req *http.Request, via []*http.Request) error); ok {
+			return checkRedirect
+		}
+	}
+	return nil
+}
+
+func requestModuleFromRequest(req *http.Request) string {
+	if req == nil {
+		return ""
+	}
+	if val := req.Context().Value(requestModuleCtxKey{}); val != nil {
+		if module, ok := val.(string); ok {
+			return module
+		}
+	}
+	return ""
+}
+
+func requestLoggerFromRequest(req *http.Request) *logging.Logger {
+	if req == nil {
+		return nil
+	}
+	if val := req.Context().Value(requestLoggerCtxKey{}); val != nil {
+		if reqLogger, ok := val.(*logging.Logger); ok {
+			return reqLogger
+		}
+	}
+	return nil
+}
+
+func requestLogContext(reqID uint64, module string) string {
+	if module == "" {
+		return fmt.Sprintf("req-id=%d", reqID)
+	}
+	return fmt.Sprintf("req-id=%d module=%s", reqID, module)
+}
+
+func backoffWithJitter(baseDelay, maxDelay, attempt int) time.Duration {
 	if attempt < 1 {
 		attempt = 1
 	}
@@ -208,13 +575,15 @@ func backoffWithJitter(baseDelay, maxDelay int, attempt int) time.Duration {
 
 func ReadAndRestoreBody(resp *http.Response) ([]byte, error) {
 	if resp == nil || resp.Body == nil {
-		return nil, fmt.Errorf("response or response body is nil")
+		return nil, errors.New("response or response body is nil")
 	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
-	resp.Body.Close()
+	if err := resp.Body.Close(); err != nil {
+		return nil, fmt.Errorf("failed to close response body: %w", err)
+	}
 	resp.Body = io.NopCloser(bytes.NewBuffer(body))
 	return body, nil
 }

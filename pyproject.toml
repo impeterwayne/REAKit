@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "arekit"
+version = "2.0.0"
+description = "Unified Android Reverse Engineering & Automation Framework"
+readme = "README.md"
+requires-python = ">=3.8"
+authors = [
+    { name = "impeterwayne" }
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Topic :: Security",
+    "Topic :: Software Development :: Disassemblers"
+]
+dependencies = []
+
+[project.scripts]
+are = "arekit.cli:main"
+arekit = "arekit.cli:main"
+scrcpy-cli = "arekit.scrcpy:scrcpy_cli_main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["arekit*"]
+
