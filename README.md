@@ -1,9 +1,4 @@
-# Android Reverse Engineering Kit (ARE_Kit) Documentation
-
-Welcome to the **Android Reverse Engineering Kit (ARE_Kit)** documentation. This suite provides a robust, developer-centric toolkit and unified CLI to automate downloading, decompilation, analysis, runtime extraction, and device control for Android applications.
-
-Whether you are performing malware analysis, security audits, business intelligence analysis, application benchmarking, or automated UI testing, `ARE_Kit` standardizes the workflow.
-
+# Android Reverse Engineering Kit (ARE_Kit)
 ---
 ## Installation & Setup
 
