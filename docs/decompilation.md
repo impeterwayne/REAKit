@@ -1,12 +1,12 @@
 # Bytecode Decompilation & JADX Guide
 
-This guide covers the static decompilation and bytecode analysis architecture in **ARE_Kit**, which converts raw Android application packages (`.apk`, `.xapk`, `.apks`) into navigable, structured Java source codebases and Android Studio-ready Gradle projects.
+This guide covers the static decompilation and bytecode analysis architecture in **REA_Kit**, which converts raw Android application packages (`.apk`, `.xapk`, `.apks`) into navigable, structured Java source codebases and Android Studio-ready Gradle projects.
 
 ---
 
 ## Decompilation Pipeline Architecture
 
-`ARE_Kit` integrates **JADX v1.5.6+** and **APKTool** within a unified orchestration layer. It automatically handles archive extraction, multi-APK split bundle aggregation, CPU-aware multi-threading, and JVM memory allocation safeguards.
+`REA_Kit` integrates **JADX v1.5.6+** and **APKTool** within a unified orchestration layer. It automatically handles archive extraction, multi-APK split bundle aggregation, CPU-aware multi-threading, and JVM memory allocation safeguards.
 
 ```mermaid
 graph TD
@@ -21,7 +21,7 @@ graph TD
         Extracted --> Splits[split_config.arm64.apk<br/>split_config.en.apk<br/>split_config.xxhdpi.apk]
     end
 
-    subgraph Decompiler ["ARE_Kit Decompiler Engine"]
+    subgraph Decompiler ["REA_Kit Decompiler Engine"]
         APK --> Engine[JADX Decompilation Engine]
         Base & Splits -->|Unified Multi-APK Feed| Engine
         
@@ -39,17 +39,17 @@ graph TD
 
 ---
 
-## Decompilation via CLI (`are decode` / `are decompile`)
+## Decompilation via CLI (`rea decode` / `rea decompile`)
 
-The `are decode` command reads packages from your active workspace, unpacks multi-APK splits, optimizes JVM memory parameters, and decompiles classes into `workspaces/<package>/jadx_src/`.
+The `rea decode` command reads packages from your active workspace, unpacks multi-APK splits, optimizes JVM memory parameters, and decompiles classes into `workspaces/<package>/jadx_src/`.
 
 ### Command Syntax
 
 ```bash
-are decode [target] [options]
+rea decode [target] [options]
 ```
 
-*Alias:* `are decompile`
+*Alias:* `rea decompile`
 
 ### Options
 
@@ -70,65 +70,65 @@ are decode [target] [options]
 #### 1. Decompile All Configured Targets
 Decompile every target defined in your `workspace_config.json`:
 ```bash
-are decode
+rea decode
 ```
 
 #### 2. Decompile a Specific Target Package
 Target a specific app by its Android package identifier:
 ```bash
-are decode com.zodiac.horoscope.palmreader.scanpalmistry
+rea decode com.zodiac.horoscope.palmreader.scanpalmistry
 ```
 
 #### 3. Decompile Using a Friendly Alias
 Use an alias configured in `workspace_config.json`:
 ```bash
-are decode -t Scanpalmistry
+rea decode -t Scanpalmistry
 ```
 
 #### 4. Decompile from a Google Play Store URL
 Pass a direct store link (automatically parses the package name):
 ```bash
-are decode "https://play.google.com/store/apps/details?id=com.zodiac.horoscope.palmreader.scanpalmistry"
+rea decode "https://play.google.com/store/apps/details?id=com.zodiac.horoscope.palmreader.scanpalmistry"
 ```
 
 #### 5. High-Performance / High-Memory Tuning
 For massive enterprise apps (50MB+ DEX code), assign custom thread count and allocate 16 GB of JVM heap memory:
 ```bash
-are decode -t Scanpalmistry -j 16 --heap 16g
+rea decode -t Scanpalmistry -j 16 --heap 16g
 ```
 
 ---
 
-## Interactive JADX GUI (`are jadx-gui`)
+## Interactive JADX GUI (`rea jadx-gui`)
 
-For interactive reverse engineering, graph viewing, class searching, and live decompilation inspection, `ARE_Kit` provides direct integration with the graphical JADX GUI.
+For interactive reverse engineering, graph viewing, class searching, and live decompilation inspection, `REA_Kit` provides direct integration with the graphical JADX GUI.
 
 ```bash
 # Launch empty JADX GUI
-are jadx-gui
+rea jadx-gui
 
 # Launch JADX GUI and automatically open the target's APK
-are jadx-gui com.zodiac.horoscope.palmreader.scanpalmistry
+rea jadx-gui com.zodiac.horoscope.palmreader.scanpalmistry
 
 # Launch JADX GUI using target alias
-are jadx-gui -t Scanpalmistry
+rea jadx-gui -t Scanpalmistry
 ```
 
 > [!TIP]
-> When a target package or alias is provided, `are jadx-gui` automatically inspects `workspaces/<package>/apks/` and loads the primary APK file directly into the editor.
+> When a target package or alias is provided, `rea jadx-gui` automatically inspects `workspaces/<package>/apks/` and loads the primary APK file directly into the editor.
 
 ---
 
-## Low-Level Smali & Resource Inspection (`are apktool`)
+## Low-Level Smali & Resource Inspection (`rea apktool`)
 
 When you need direct Smali disassembly, manifest editing, or raw resource decompilation and rebuilding, use the bundled APKTool wrapper:
 
 ```bash
 # Disassemble an APK to Smali and raw resources
-are apktool d workspaces/com.example.app/apks/base.apk -o workspaces/com.example.app/smali_out
+rea apktool d workspaces/com.example.app/apks/base.apk -o workspaces/com.example.app/smali_out
 
 # Reassemble / Rebuild an APK from modified Smali sources
-are apktool b workspaces/com.example.app/smali_out -o workspaces/com.example.app/rebuilt_app.apk
+rea apktool b workspaces/com.example.app/smali_out -o workspaces/com.example.app/rebuilt_app.apk
 ```
 
 ---
@@ -137,7 +137,7 @@ are apktool b workspaces/com.example.app/smali_out -o workspaces/com.example.app
 
 Modern applications on Google Play are commonly published as **Android App Bundles (AAB)** and distributed to devices as **Split APKs** (`.xapk` or `.apks` archives). Individual split APKs contain only partial bytecode and assets (such as ABI-specific native libraries `arm64-v8a` or language-specific string tables).
 
-`ARE_Kit` manages this automatically:
+`REA_Kit` manages this automatically:
 
 1. **Auto-Detection:** Detects `.xapk` and `.apks` archives inside `workspaces/<package>/apks/`.
 2. **Recursive Extraction:** Unpacks the archive into a dedicated `<archive_name>_extracted/` directory.
@@ -148,7 +148,7 @@ Modern applications on Google Play are commonly published as **Android App Bundl
 
 ## JADX Decompiler Flags & Security Optimization
 
-`ARE_Kit` applies specialized decompiler flags tuned for security reviews, malware auditing, and code readability:
+`REA_Kit` applies specialized decompiler flags tuned for security reviews, malware auditing, and code readability:
 
 | Flag | Purpose & Impact |
 |---|---|
@@ -165,7 +165,7 @@ Modern applications on Google Play are commonly published as **Android App Bundl
 
 ## Memory Management & Out-of-Memory (OOM) Safeguards
 
-Decompiling complex Android applications with multiple DEX files can consume substantial JVM heap space. `ARE_Kit` implements the following safeguards:
+Decompiling complex Android applications with multiple DEX files can consume substantial JVM heap space. `REA_Kit` implements the following safeguards:
 
 ### 1. Automatic JVM Heap Reservation
 The decompiler checks for the `JADX_OPTS` environment variable. If not explicitly set by the user, it assigns:
@@ -206,8 +206,6 @@ workspaces/com.zodiac.horoscope.palmreader.scanpalmistry/
     └── shared_prefs/                          # XML preferences
 ```
 
-
-
 ---
 
 ## Troubleshooting & FAQs
@@ -216,17 +214,17 @@ workspaces/com.zodiac.horoscope.palmreader.scanpalmistry/
 * **Cause:** The target APK contains hundreds of classes or heavy multidex archives exceeding JVM heap memory.
 * **Fix:** Increase heap allocation using the `--heap` argument:
   ```bash
-  are decode com.example.app --heap 16g
+  rea decode com.example.app --heap 16g
   ```
 
 ### 2. `jadx` or `java` is not recognized
 * **Cause:** Java Development Kit (JDK 11+) is missing or not registered in your `PATH`.
-* **Fix:** Verify your environment setup with `are env`, install a modern JDK (such as OpenJDK 17 or 21), and run `are install` to register bundled binaries.
+* **Fix:** Verify your environment setup with `rea env`, install a modern JDK (such as OpenJDK 17 or 21), and run `rea install` to register bundled binaries.
 
 ### 3. Corrupted Split Archive (`zipfile.BadZipFile`)
 * **Cause:** The downloaded `.xapk` or `.apks` was truncated during download.
-* **Fix:** Re-download the target using `are dl <target> -F` (force overwrite), then re-run `are decode <target>`.
+* **Fix:** Re-download the target using `rea dl <target> -F` (force overwrite), then re-run `rea decode <target>`.
 
 ### 4. Decompilation of Kotlin Coroutines or Lambdas Produces Incomplete Code
 * **Cause:** Obfuscators (R8 / ProGuard) strip variable names and fold lambda structures.
-* **Fix:** Launch the interactive GUI (`are jadx-gui -t <target>`) to inspect bytecode mappings or toggle decompilation modes (`restructure` vs `simple` vs `fallback`).
+* **Fix:** Launch the interactive GUI (`rea jadx-gui -t <target>`) to inspect bytecode mappings or toggle decompilation modes (`restructure` vs `simple` vs `fallback`).

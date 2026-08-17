@@ -2,7 +2,7 @@
 
 This reference details the structure and schema of the centralized configuration file **`config/workspace_config.json`**. 
 
-All commands in **ARE_Kit** (`are init`, `are download`, `are decode`, `are pull`) read from this configuration to resolve targets, locate output paths, and provision workspaces.
+All commands in **REA_Kit** (`rea init`, `rea download`, `rea decode`, `rea pull`) read from this configuration to resolve targets, locate output paths, and provision workspaces.
 
 ---
 
@@ -58,7 +58,7 @@ Defines the standard internal directory schema created for every target package.
 | `runtime.external` | `"runtime/external"` | Local mirror for `/sdcard/Android/data/<package_name>/` external app storage. |
 
 > [!TIP]
-> `WorkspaceManager` walks nested dictionary structures recursively. You can add arbitrary custom directory keys (e.g. `"mitm": "mitm_intercepts"`) and `are init` will automatically provision them across all app workspaces.
+> `WorkspaceManager` walks nested dictionary structures recursively. You can add arbitrary custom directory keys (e.g. `"mitm": "mitm_intercepts"`) and `rea init` will automatically provision them across all app workspaces.
 
 ### 3. `targets` (Array of Strings or Objects)
 Maintains the centralized list of targets, URLs, aliases, and download configurations.
@@ -72,29 +72,29 @@ Maintains the centralized list of targets, URLs, aliases, and download configura
 
 ---
 
-## Dynamic Target Management via CLI (`are target`)
+## Dynamic Target Management via CLI (`rea target`)
 
-You can inspect and modify targets directly using the `are` CLI without manually editing JSON:
+You can inspect and modify targets directly using the `rea` CLI without manually editing JSON:
 
 ```bash
 # 1. List all configured targets & workspace statuses
-are target list
+rea target list
 
 # 2. Add target via Google Play Store URL
-are target add "https://play.google.com/store/apps/details?id=com.zodiac.horoscope.palmreader.scanpalmistry&hl=en_US"
+rea target add "https://play.google.com/store/apps/details?id=com.zodiac.horoscope.palmreader.scanpalmistry&hl=en_US"
 
 # 3. Add target with explicit alias and download source
-are target add "org.lichess.mobileV2" --alias "Lichess" --source "fdroid"
+rea target add "org.lichess.mobileV2" --alias "Lichess" --source "fdroid"
 
 # 4. Remove target by package name or alias
-are target remove com.example.app
+rea target remove com.example.app
 ```
 
 ---
 
 ## Supported Target URL & ID Formats
 
-ARE_Kit automatically resolves package names from any of the following input formats:
+REA_Kit automatically resolves package names from any of the following input formats:
 
 | Format Type | Example Input | Extracted Package Name |
 |---|---|---|
@@ -104,5 +104,3 @@ ARE_Kit automatically resolves package names from any of the following input for
 | **Store Web Link** | `https://apkcombo.com/facebook-lite/com.facebook.lite/` | `com.facebook.lite` |
 | **Direct APK File URL** | `https://example.com/downloads/com.test.app.apk` | `com.test.app` |
 | **Raw Package ID** | `com.example.app` | `com.example.app` |
-
-

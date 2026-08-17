@@ -2,9 +2,9 @@ import os
 import shutil
 import subprocess
 from pathlib import Path
-from arekit.config import CORE_DIR
-from arekit.env import find_scrcpy_dir
-from arekit.utils import log_info, log_success, log_warn, log_error
+from reakit.config import CORE_DIR
+from reakit.env import find_scrcpy_dir
+from reakit.utils import log_info, log_success, log_warn, log_error
 
 class ScrcpyBridge:
     def __init__(self):
@@ -78,11 +78,11 @@ class ScrcpyBridge:
             if server_path.exists() and (not existing_server or not Path(existing_server).exists()):
                 env["SCRCPY_SERVER_PATH"] = str(server_path.resolve())
 
-            adb_path = self.scrcpy_dir / ("adb.exe" if os.name == "nt" else "adb")
+            adb_file = self.scrcpy_dir / ("adb.exe" if os.name == "nt" else "adb")
             existing_adb = env.get("ADB_PATH") or env.get("ADB")
-            if adb_path.exists() and (not existing_adb or not Path(existing_adb).exists()):
-                env["ADB_PATH"] = str(adb_path.resolve())
-                env["ADB"] = str(adb_path.resolve())
+            if adb_file.exists() and (not existing_adb or not Path(existing_adb).exists()):
+                env["ADB_PATH"] = str(adb_file.resolve())
+                env["ADB"] = str(adb_file.resolve())
 
         log_info(f"Launching screen mirroring: {' '.join(cmd)}")
         try:
@@ -97,9 +97,7 @@ class ScrcpyBridge:
 def scrcpy_cli_main():
     """Direct CLI entrypoint for standalone 'scrcpy-cli' command."""
     import sys
-    from arekit.env import inject_runtime_path
+    from reakit.env import inject_runtime_path
     inject_runtime_path()
     bridge = ScrcpyBridge()
     sys.exit(bridge.run_cli(sys.argv[1:]))
-
-

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Workspace initialization script (backward-compatible wrapper around arekit)."""
+"""Workspace initialization script (backward-compatible wrapper around reakit)."""
 import os
 import sys
 import argparse
@@ -8,8 +8,8 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE_DIR))
 
-from arekit.config import ConfigManager
-from arekit.workspace import WorkspaceManager
+from reakit.config import ConfigManager
+from reakit.workspace import WorkspaceManager
 
 def init_workspace(config_file=None, input_txt=None):
     config_mgr = ConfigManager(config_file)

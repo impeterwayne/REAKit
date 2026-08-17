@@ -1,5 +1,6 @@
 import os
 import sys
+import re
 import subprocess
 from pathlib import Path, PurePosixPath
 from urllib.parse import urlparse, parse_qs
@@ -36,14 +37,12 @@ def log_dim(msg: str):
 
 def print_banner():
     art = r"""
-   ___    ____  ______     __ __ _ __ 
-  /   |  / __ \/ ____/    / //_/(_) /_
- / /| | / /_/ / __/      / ,<  / / __/
-/ ___ |/ _, _/ /___ _   / /| |/ / /_  
-/_/  |_/_/ |_/_____(_) /_/ |_/_/\__/  """
-    print(f"{Colors.CYAN}{Colors.BOLD}{art}\n{Colors.DIM}Android Reverse Engineering & Automation Kit v2.0{Colors.RESET}\n")
-
-import re
+    ____  ______ ___         __ __ _ __ 
+   / __ \/ ____//   |       / //_/(_) /_
+  / /_/ / __/  / /| |      / ,<  / / __/
+ / _, _/ /___ / ___ | _   / /| |/ / /_  
+/_/ |_/_____//_/  |_|(_) /_/ |_/_/\__/  """
+    print(f"{Colors.CYAN}{Colors.BOLD}{art}\n{Colors.DIM}Reverse Engineering Android & Automation Kit v2.0{Colors.RESET}\n")
 
 def extract_package_name(line: str) -> str | None:
     """Extracts a package name from a Google Play link, APK store link, or raw string."""

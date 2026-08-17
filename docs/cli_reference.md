@@ -1,13 +1,13 @@
-# ARE_Kit CLI Reference Manual
+# REA_Kit CLI Reference Manual
 
-The `are` CLI provides a unified interface for every stage of Android reverse engineering, APK downloading, decompilation, runtime sandbox extraction, device automation, and environment configuration.
+The `rea` CLI provides a unified interface for every stage of Android reverse engineering, APK downloading, decompilation, runtime sandbox extraction, device automation, and environment configuration.
 
 ---
 
 ## Global Usage & Syntax
 
 ```bash
-are [command] [positional_arg] [options]
+rea [command] [positional_arg] [options]
 ```
 
 ### Global Options
@@ -25,28 +25,28 @@ These options apply across all relevant subcommands:
 
 | Command | Aliases | Description | Primary Example |
 |---|---|---|---|
-| [`are init`](#1-are-init) | | Provision workspace directories for targets | `are init com.example.app` |
-| [`are download`](#2-are-download--are-dl) | `dl` | Download APK/XAPK packages via `apkd` | `are dl com.example.app` |
-| [`are decode`](#3-are-decode--are-decompile) | `decompile` | Decompile APKs into Java Gradle projects via JADX | `are decode com.example.app` |
-| [`are pull`](#4-are-pull--are-runtime) | `runtime` | Extract app sandbox files via ADB (root/su/run-as) | `are pull com.example.app` |
-| [`are pipeline`](#5-are-pipeline--are-all--are-run) | `all`, `run` | Execute complete static pipeline (init -> dl -> decode) | `are pipeline -t com.example.app` |
-| [`are scrcpy`](#6-are-scrcpy--are-control) | `control` | Low-latency device automation via `scrcpy-cli` | `are scrcpy tap 500 1200` |
-| [`are mirror`](#7-are-mirror--are-screen) | `screen` | Launch desktop screen mirroring window | `are mirror -s emulator-5554` |
-| [`are jadx-gui`](#8-are-jadx-gui) | | Launch interactive graphical JADX decompiler | `are jadx-gui -t com.example.app` |
-| [`are apktool`](#9-are-apktool) | | Disassemble / reassemble APKs using APKTool | `are apktool d app.apk -o out` |
-| [`are target`](#10-are-target) | | Inspect, add, or remove target apps | `are target list` |
-| [`are env`](#11-are-env--are-check) | `check` | Diagnostics report for prerequisites and connected devices | `are env` |
-| [`are install`](#12-are-install--are-setup--are-setup-path) | `setup`, `setup-path` | Install & configure environment, tools, and Windows PATH | `are install` |
+| [`rea init`](#1-rea-init) | | Provision workspace directories for targets | `rea init com.example.app` |
+| [`rea download`](#2-rea-download--rea-dl) | `dl` | Download APK/XAPK packages via `apkd` | `rea dl com.example.app` |
+| [`rea decode`](#3-rea-decode--rea-decompile) | `decompile` | Decompile APKs into Java Gradle projects via JADX | `rea decode com.example.app` |
+| [`rea pull`](#4-rea-pull--rea-runtime) | `runtime` | Extract app sandbox files via ADB (root/su/run-as) | `rea pull com.example.app` |
+| [`rea pipeline`](#5-rea-pipeline--rea-all--rea-run) | `all`, `run` | Execute complete static pipeline (init -> dl -> decode) | `rea pipeline -t com.example.app` |
+| [`rea scrcpy`](#6-rea-scrcpy--rea-control) | `control` | Low-latency device automation via `scrcpy-cli` | `rea scrcpy tap 500 1200` |
+| [`rea mirror`](#7-rea-mirror--rea-screen) | `screen` | Launch desktop screen mirroring window | `rea mirror -s emulator-5554` |
+| [`rea jadx-gui`](#8-rea-jadx-gui) | | Launch interactive graphical JADX decompiler | `rea jadx-gui -t com.example.app` |
+| [`rea apktool`](#9-rea-apktool) | | Disassemble / reassemble APKs using APKTool | `rea apktool d app.apk -o out` |
+| [`rea target`](#10-rea-target) | | Inspect, add, or remove target apps | `rea target list` |
+| [`rea env`](#11-rea-env--rea-check) | `check` | Diagnostics report for prerequisites and connected devices | `rea env` |
+| [`rea install`](#12-rea-install--rea-setup--rea-setup-path) | `setup`, `setup-path` | Install & configure environment, tools, and Windows PATH | `rea install` |
 
 ---
 
 ## Detailed Command Specifications
 
-### 1. `are init`
+### 1. `rea init`
 Provisions isolated target folders (`apks/`, `jadx_src/`, `docs/`, `runtime/`) and creates target metadata.
 
 ```bash
-are init [target] [options]
+rea init [target] [options]
 ```
 
 | Flag | Long Option | Description |
@@ -59,20 +59,20 @@ are init [target] [options]
 
 ```bash
 # Initialize all targets from config
-are init
+rea init
 
 # Initialize single target directly
-are init com.example.app
-are init "https://play.google.com/store/apps/details?id=com.example.app"
+rea init com.example.app
+rea init "https://play.google.com/store/apps/details?id=com.example.app"
 ```
 
 ---
 
-### 2. `are download` (`are dl`)
+### 2. `rea download` (`rea dl`)
 Downloads APK or Split APK (`.xapk`, `.apks`) archives from remote sources into `workspaces/<package>/apks/`.
 
 ```bash
-are download [target] [options]
+rea download [target] [options]
 ```
 
 | Flag | Long Option | Description |
@@ -85,22 +85,22 @@ are download [target] [options]
 
 ```bash
 # Download all targets configured in workspace_config.json
-are dl
+rea dl
 
 # Download single package
-are dl com.zodiac.horoscope.palmreader.scanpalmistry
+rea dl com.zodiac.horoscope.palmreader.scanpalmistry
 
 # Download from F-Droid
-are dl org.lichess.mobileV2 -s fdroid
+rea dl org.lichess.mobileV2 -s fdroid
 ```
 
 ---
 
-### 3. `are decode` (`are decompile`)
+### 3. `rea decode` (`rea decompile`)
 Decompiles APK/XAPK archives into a clean Java Gradle project using JADX with CPU multi-threading and JVM heap safeguards.
 
 ```bash
-are decode [target] [options]
+rea decode [target] [options]
 ```
 
 | Flag | Long Option | Description | Default |
@@ -113,19 +113,19 @@ are decode [target] [options]
 
 ```bash
 # Decompile active / all targets
-are decode
+rea decode
 
 # Decompile specific target with 16 GB heap
-are decode com.example.app --heap 16g -j 8
+rea decode com.example.app --heap 16g -j 8
 ```
 
 ---
 
-### 4. `are pull` (`are runtime`)
+### 4. `rea pull` (`rea runtime`)
 Extracts internal app databases (SQLite), Shared Preferences (XML), and caches via ADB directly from the device sandbox.
 
 ```bash
-are pull [package_name] [options]
+rea pull [package_name] [options]
 ```
 
 | Flag | Long Option | Description |
@@ -135,19 +135,19 @@ are pull [package_name] [options]
 
 ```bash
 # Pull runtime data for active target
-are pull
+rea pull
 
 # Pull runtime data for specific package
-are pull com.zodiac.horoscope.palmreader.scanpalmistry
+rea pull com.zodiac.horoscope.palmreader.scanpalmistry
 ```
 
 ---
 
-### 5. `are pipeline` (`are all`, `are run`)
+### 5. `rea pipeline` (`rea all`, `rea run`)
 Executes the automated static pipeline workflow (init -> download -> decode) sequentially.
 
 ```bash
-are pipeline [target] [options]
+rea pipeline [target] [options]
 ```
 
 | Flag | Long Option | Description |
@@ -160,42 +160,42 @@ are pipeline [target] [options]
 | | `--skip-decode` | Skip the JADX decompilation phase |
 
 ```bash
-are pipeline -t https://play.google.com/store/apps/details?id=com.zodiac.horoscope.palmreader.scanpalmistry --heap 16g
+rea pipeline -t https://play.google.com/store/apps/details?id=com.zodiac.horoscope.palmreader.scanpalmistry --heap 16g
 ```
 
 ---
 
-### 6. `are scrcpy` (`are control`)
+### 6. `rea scrcpy` (`rea control`)
 Automates Android devices with sub-millisecond latency using the bundled `scrcpy-cli` engine.
 
 ```bash
-are scrcpy [daemon|action] [args...]
+rea scrcpy [daemon|action] [args...]
 ```
 
 ```bash
 # Daemon Management
-are scrcpy daemon start
-are scrcpy daemon status
-are scrcpy daemon stop
+rea scrcpy daemon start
+rea scrcpy daemon status
+rea scrcpy daemon stop
 
 # Gestures & Input
-are scrcpy tap 540 1200
-are scrcpy swipe 540 1600 540 400 300
-are scrcpy write "Search term"
-are scrcpy key HOME
+rea scrcpy tap 540 1200
+rea scrcpy swipe 540 1600 540 400 300
+rea scrcpy write "Search term"
+rea scrcpy key HOME
 
 # Capture & UI Dump
-are scrcpy screenshot app_home.png
-are scrcpy ui-dump layout.xml
+rea scrcpy screenshot app_home.png
+rea scrcpy ui-dump layout.xml
 ```
 
 ---
 
-### 7. `are mirror` (`are screen`)
+### 7. `rea mirror` (`rea screen`)
 Launches a real-time interactive desktop screen mirroring window.
 
 ```bash
-are mirror [options]
+rea mirror [options]
 ```
 
 | Flag | Long Option | Description |
@@ -205,79 +205,79 @@ are mirror [options]
 | | `--fps <fps>` | Limit video frame rate (e.g. `60`) |
 
 ```bash
-are mirror -s emulator-5554 -m 1280 --fps 60
+rea mirror -s emulator-5554 -m 1280 --fps 60
 ```
 
 ---
 
-### 8. `are jadx-gui`
+### 8. `rea jadx-gui`
 Launches the interactive graphical JADX decompiler with optional automatic APK loading.
 
 ```bash
 # Open blank JADX GUI
-are jadx-gui
+rea jadx-gui
 
 # Open JADX GUI and load target app's APK
-are jadx-gui com.example.app
+rea jadx-gui com.example.app
 ```
 
 ---
 
-### 9. `are apktool`
+### 9. `rea apktool`
 Direct CLI wrapper for the bundled APKTool binary for smali and resource disassembly.
 
 ```bash
 # Disassemble APK
-are apktool d app.apk -o smali_dir
+rea apktool d app.apk -o smali_dir
 
 # Reassemble APK
-are apktool b smali_dir -o rebuilt.apk
+rea apktool b smali_dir -o rebuilt.apk
 ```
 
 ---
 
-### 10. `are target`
+### 10. `rea target`
 Inspects, registers, and removes target applications in `workspace_config.json`.
 
 ```bash
 # List configured targets and workspace directory statuses
-are target list
+rea target list
 
 # Add target from Google Play URL
-are target add "https://play.google.com/store/apps/details?id=com.example.app"
+rea target add "https://play.google.com/store/apps/details?id=com.example.app"
 
 # Add target with custom alias and source
-are target add com.example.app --alias "CustomApp" --source "fdroid"
+rea target add com.example.app --alias "CustomApp" --source "fdroid"
 
 # Remove target
-are target remove com.example.app
+rea target remove com.example.app
 ```
 
 ---
 
-### 11. `are env` (`are check`)
+### 11. `rea env` (`rea check`)
 Runs comprehensive diagnostic checks on Python, Java JDK, Node.js, bundled binaries, and connected ADB devices.
 
 ```bash
-are env
+rea env
 ```
 
 ---
 
-### 12. `are install` (`are setup`, `are setup-path`)
-Automated installer and environment configurator for ARE_Kit. Automatically registers Windows User Environment PATH for all bundled tools (`are`, `adb`, `scrcpy`, `jadx`, `apkd`, `apktool`, `scrcpy-cli`), configures runtime environment variables (`SCRCPY_SERVER_PATH`, `ADB_PATH`), builds & registers `scrcpy-cli` globally via `npm link`, and registers the `arekit` Python package in editable mode via `pip install -e .`.
+### 12. `rea install` (`rea setup`, `rea setup-path`)
+Automated installer and environment configurator for REA_Kit. Automatically registers Windows User Environment PATH for all bundled tools (`rea`, `adb`, `scrcpy`, `jadx`, `apkd`, `apktool`, `scrcpy-cli`), configures runtime environment variables (`SCRCPY_SERVER_PATH`, `ADB_PATH`), builds & registers `scrcpy-cli` globally via `npm link`, and registers the `reakit` Python package in editable mode via `pip install -e .`.
 
 ```bash
 # Standard complete installation & PATH registration (Permanent)
-are install
+rea install
 
 # Configure PATH for current terminal session only
-are install --session
+rea install --session
 
 # Check installation & environment status
-are install --check
+rea install --check
 
 # Custom installation flags
-are install --skip-pip    # Skip pip editable install
-are install --skip-npm    # Skip npm scrcpy-cli linking
+rea install --skip-pip    # Skip pip editable install
+rea install --skip-npm    # Skip npm scrcpy-cli linking
 ```

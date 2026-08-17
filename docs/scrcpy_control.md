@@ -1,6 +1,6 @@
 # Android Device Control & Automation Guide
 
-**ARE_Kit** integrates [`@impeterwayne/scrcpy-cli`](https://github.com/impeterwayne/scrcpy_cli) as a core module to enable low-latency, agent-friendly Android device automation and real-time screen mirroring.
+**REA_Kit** integrates [`@impeterwayne/scrcpy-cli`](https://github.com/impeterwayne/scrcpy_cli) as a core module to enable low-latency, agent-friendly Android device automation and real-time screen mirroring.
 
 ---
 
@@ -8,7 +8,7 @@
 
 ```mermaid
 graph LR
-    User[User / Agent / Pipeline] -->|are scrcpy / are control| CLI[scrcpy-cli Engine]
+    User[User / Agent / Pipeline] -->|rea scrcpy / rea control| CLI[scrcpy-cli Engine]
     CLI -->|Daemon Running| Socket[scrcpy Control Socket :27183]
     Socket -->|Sub-millisecond Latency| Server[scrcpy-server on Device]
     CLI -->|Daemon Inactive| ADB[Direct ADB Shell Execution]
@@ -24,21 +24,21 @@ graph LR
 
 ```bash
 # Start background daemon for default device
-are scrcpy daemon start
+rea scrcpy daemon start
 
 # Check daemon running status
-are scrcpy daemon status
+rea scrcpy daemon status
 
 # Run daemon in foreground (useful for debugging)
-are scrcpy daemon run
+rea scrcpy daemon run
 
 # Stop background daemon
-are scrcpy daemon stop
+rea scrcpy daemon stop
 ```
 
 ### Targeting Specific Devices
 ```bash
-are scrcpy -s emulator-5554 daemon start
+rea scrcpy -s emulator-5554 daemon start
 ```
 
 ---
@@ -48,85 +48,85 @@ are scrcpy -s emulator-5554 daemon start
 ### 1. Touch & Gestures
 ```bash
 # Tap coordinate (x, y)
-are scrcpy tap 540 1200
+rea scrcpy tap 540 1200
 
 # Swipe from (x1, y1) to (x2, y2) with duration in ms
-are scrcpy swipe 540 1600 540 400 300
+rea scrcpy swipe 540 1600 540 400 300
 
 # Scroll at coordinate (x, y) by (dx, dy)
-are scrcpy scroll 540 1200 0 -200
+rea scrcpy scroll 540 1200 0 -200
 ```
 
 ### 2. Text Input & Keycodes
 ```bash
 # Type text into focused input field
-are scrcpy write "Search query text"
+rea scrcpy write "Search query text"
 
 # Press named Android keys
-are scrcpy key HOME
-are scrcpy key BACK
-are scrcpy key ENTER
-are scrcpy key VOLUME_UP
-are scrcpy key POWER
+rea scrcpy key HOME
+rea scrcpy key BACK
+rea scrcpy key ENTER
+rea scrcpy key VOLUME_UP
+rea scrcpy key POWER
 
 # Press numeric Android keycode
-are scrcpy key 3
+rea scrcpy key 3
 ```
 
 ### 3. Screen Capture & UI Inspection
 ```bash
 # Capture screenshot (saves to screenshot.png by default)
-are scrcpy screenshot app_screen.png
+rea scrcpy screenshot app_screen.png
 
 # Dump UI hierarchy XML (saves to ui-dump.xml by default)
-are scrcpy ui-dump layout.xml
+rea scrcpy ui-dump layout.xml
 ```
 
 ### 4. Clipboard Operations
 ```bash
 # Read device clipboard
-are scrcpy clipboard-get
+rea scrcpy clipboard-get
 
 # Set device clipboard
-are scrcpy clipboard-set "Sample auth token"
+rea scrcpy clipboard-set "Sample auth token"
 ```
 
 ### 5. Application Management
 ```bash
 # Launch application
-are scrcpy app-start com.zodiac.horoscope.palmreader.scanpalmistry
+rea scrcpy app-start com.zodiac.horoscope.palmreader.scanpalmistry
 
 # Force-stop application
-are scrcpy app-stop com.zodiac.horoscope.palmreader.scanpalmistry
+rea scrcpy app-stop com.zodiac.horoscope.palmreader.scanpalmistry
 
 # List installed packages
-are scrcpy app-list
+rea scrcpy app-list
 ```
 
 ### 6. Device Diagnostics
 ```bash
 # Display model, Android version, SDK, and resolution
-are scrcpy device-info
+rea scrcpy device-info
 
 # List all connected ADB devices
-are scrcpy device-list
+rea scrcpy device-list
 ```
 
 ---
 
-## Interactive Screen Mirroring (`are mirror` / `are screen`)
+## Interactive Screen Mirroring (`rea mirror` / `rea screen`)
 
 To launch a desktop screen mirroring window with full mouse and keyboard interaction:
 
 ```bash
 # Launch interactive mirror on default device
-are mirror
+rea mirror
 
 # Mirror specific device serial with custom max resolution & frame rate
-are mirror -s emulator-5554 -m 1280 --fps 60
+rea mirror -s emulator-5554 -m 1280 --fps 60
 
 # Pass extra scrcpy flags
-are mirror -- --stay-awake --turn-screen-off
+rea mirror -- --stay-awake --turn-screen-off
 ```
 
 ### Mirror Options

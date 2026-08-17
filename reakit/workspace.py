@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
-from arekit.config import ConfigManager, find_targets_file
-from arekit.utils import extract_package_name, ensure_dir, log_info, log_success, log_warn, log_dim
+from reakit.config import ConfigManager, find_targets_file
+from reakit.utils import extract_package_name, ensure_dir, log_info, log_success, log_warn, log_dim
 
 def extract_structure_paths(structure_dict: dict) -> list[str]:
     """Recursively extracts directory paths from a nested dictionary."""
@@ -74,7 +74,7 @@ class WorkspaceManager:
         if not targets:
             log_warn("No target applications configured in active configuration.")
             log_info(f"Target workspace root is: {self.config_mgr.workspace_root}")
-            log_info("Tip: Run 'are target add <package_or_url>' or 'are init <package_or_url>'.")
+            log_info("Tip: Run 'rea target add <package_or_url>' or 'rea init <package_or_url>'.")
             return []
 
         initialized = []

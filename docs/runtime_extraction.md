@@ -1,20 +1,20 @@
 # Android Runtime Sandbox Data Extraction Guide
 
-This guide details how to automatically extract dynamic application sandbox storage (SQLite databases, Shared Preferences XML, caches, and external files) from physical devices and emulators using **ARE_Kit**.
+This guide details how to automatically extract dynamic application sandbox storage (SQLite databases, Shared Preferences XML, caches, and external files) from physical devices and emulators using **REA_Kit**.
 
 ---
 
-## Sandbox Data Puller (`are pull` / `are runtime`)
+## Sandbox Data Puller (`rea pull` / `rea runtime`)
 
 During application execution on Android, internal app states are protected behind Linux user-isolation sandboxes (`/data/data/<package_name>`).
 
-The `are pull` command bridges this boundary by automatically negotiating permissions across multiple privilege tiers and downloading internal databases, configurations, and caches directly into your local workspace.
+The `rea pull` command bridges this boundary by automatically negotiating permissions across multiple privilege tiers and downloading internal databases, configurations, and caches directly into your local workspace.
 
 ### Core Extraction Architecture
 
 ```mermaid
 graph TD
-    User[User / Agent / Pipeline] -->|are pull <package_name>| Engine[ARE_Kit Runtime Extractor Engine]
+    User[User / Agent / Pipeline] -->|rea pull <package_name>| Engine[REA_Kit Runtime Extractor Engine]
     
     subgraph Privilege ["Sequential Privilege Negotiation"]
         Engine --> Step1{Try 1: 'adb root'}
@@ -41,13 +41,13 @@ graph TD
 
 ---
 
-## CLI Command Reference (`are pull` / `are runtime`)
+## CLI Command Reference (`rea pull` / `rea runtime`)
 
 ```bash
-are pull [package_name] [options]
+rea pull [package_name] [options]
 ```
 
-*Alias:* `are runtime`
+*Alias:* `rea runtime`
 
 ### Options
 
@@ -66,25 +66,25 @@ are pull [package_name] [options]
 #### 1. Extract Runtime Data for Active Target
 Pulls data for the primary target configured in `workspace_config.json`:
 ```bash
-are pull
+rea pull
 ```
 
 #### 2. Extract Runtime Data by Package Identifier
 Specify the target package directly as a positional argument:
 ```bash
-are pull com.zodiac.horoscope.palmreader.scanpalmistry
+rea pull com.zodiac.horoscope.palmreader.scanpalmistry
 ```
 
 #### 3. Extract Runtime Data with Explicit Package Flag
 ```bash
-are pull --package com.example.target
+rea pull --package com.example.target
 ```
 
 ---
 
 ## Sequential Privilege Escalation Negotiation
 
-`ARE_Kit` automatically evaluates and executes a 3-tier fallback strategy to access locked internal files without manual shell commands:
+`REA_Kit` automatically evaluates and executes a 3-tier fallback strategy to access locked internal files without manual shell commands:
 
 ### Tier 1: Native ADB Daemon Root (`native_root`)
 * **Target Environments:** Standard Android Virtual Devices (AVD), Android Studio Emulators, Genymotion, or engineering firmware builds.
@@ -136,8 +136,6 @@ workspaces/com.zodiac.horoscope.palmreader.scanpalmistry/runtime/
     └── files/
 ```
 
-
-
 ---
 
 ## Troubleshooting Access Blocks
@@ -145,7 +143,7 @@ workspaces/com.zodiac.horoscope.palmreader.scanpalmistry/runtime/
 If you encounter:
 `[!] Sandbox blocked read. Make sure the app is installed, device is rooted, or app is debuggable.`
 
-1. **Verify ADB Connectivity:** Run `are env` or `adb devices` to ensure your device is recognized with authorization (`device` status, not `unauthorized` or `offline`).
+1. **Verify ADB Connectivity:** Run `rea env` or `adb devices` to ensure your device is recognized with authorization (`device` status, not `unauthorized` or `offline`).
 2. **Confirm App is Installed:** Ensure the target package is installed on the connected device.
 3. **Grant Magisk Permissions:** On rooted physical devices, unlock the screen and confirm that the Magisk Superuser prompt was granted to `com.android.shell` / ADB.
 4. **Debuggable Flag:** On non-rooted devices, ensure the APK was built with `android:debuggable="true"` in its `AndroidManifest.xml` to allow `run-as` execution.

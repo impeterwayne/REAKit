@@ -1,6 +1,6 @@
 # Workspace Setup & Management Guide
 
-This guide covers the directory schema, automated workspace provisioning, and target lifecycle management in **ARE_Kit**.
+This guide covers the directory schema, automated workspace provisioning, and target lifecycle management in **REA_Kit**.
 
 To maintain a clean separation of work, each target Android application is allocated an isolated workspace directory containing downloaded packages, decompiled Java sources, notes, and runtime databases.
 
@@ -31,14 +31,14 @@ workspaces/<package_name>/
 
 ---
 
-## Workspace Initialization via CLI (`are init`)
+## Workspace Initialization via CLI (`rea init`)
 
-The `are init` command reads targets from your configuration file or accepts target identifiers on the command line to create the full directory hierarchy.
+The `rea init` command reads targets from your configuration file or accepts target identifiers on the command line to create the full directory hierarchy.
 
 ### Command Syntax
 
 ```bash
-are init [target] [options]
+rea init [target] [options]
 ```
 
 ### Options
@@ -58,34 +58,34 @@ are init [target] [options]
 #### 1. Initialize All Targets in Configuration
 Initializes directories for all applications defined in `workspace_config.json`:
 ```bash
-are init
+rea init
 ```
 
 #### 2. Initialize a Specific Target Package
 ```bash
-are init com.zodiac.horoscope.palmreader.scanpalmistry
+rea init com.zodiac.horoscope.palmreader.scanpalmistry
 ```
 
 #### 3. Initialize from a Google Play Store URL
 ```bash
-are init "https://play.google.com/store/apps/details?id=com.zodiac.horoscope.palmreader.scanpalmistry"
+rea init "https://play.google.com/store/apps/details?id=com.zodiac.horoscope.palmreader.scanpalmistry"
 ```
 
 ---
 
-## Target Management (`are target`)
+## Target Management (`rea target`)
 
-You can inspect, add, and remove targets dynamically using the `are target` subcommand:
+You can inspect, add, and remove targets dynamically using the `rea target` subcommand:
 
 ### 1. List Configured Targets & Workspace Status
 Inspect all configured targets and see if they have downloaded APKs, decompiled code, or extracted runtime files:
 ```bash
-are target list
+rea target list
 ```
 
 *Example Output:*
 ```text
-ARE_Kit Project Context:
+REA_Kit Project Context:
   * Active Config:  config\workspace_config.json
   * Workspace Root: workspaces
 
@@ -102,16 +102,14 @@ Workspace Directory Status (2):
 Add targets using package IDs or direct Play Store links (with optional custom aliases and download source providers):
 ```bash
 # Add via Google Play Store URL
-are target add "https://play.google.com/store/apps/details?id=com.example.app"
+rea target add "https://play.google.com/store/apps/details?id=com.example.app"
 
 # Add with custom alias and source repository
-are target add com.example.app --alias "CustomApp" --source "apkcombo"
+rea target add com.example.app --alias "CustomApp" --source "apkcombo"
 ```
 
 ### 3. Remove a Target Application
 Remove a target from your active configuration by package name or alias:
 ```bash
-are target remove com.example.app
+rea target remove com.example.app
 ```
-
-

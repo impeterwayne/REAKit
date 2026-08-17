@@ -1,14 +1,14 @@
 import sys
 import argparse
 from pathlib import Path
-from arekit.utils import print_banner, log_info, log_success, log_warn, log_error, Colors
-from arekit.config import ConfigManager
-from arekit.workspace import WorkspaceManager
-from arekit.downloader import Downloader
-from arekit.decompiler import Decompiler
-from arekit.runtime import RuntimeExtractor
-from arekit.scrcpy import ScrcpyBridge
-from arekit.env import (
+from reakit.utils import print_banner, log_info, log_success, log_warn, log_error, Colors
+from reakit.config import ConfigManager
+from reakit.workspace import WorkspaceManager
+from reakit.downloader import Downloader
+from reakit.decompiler import Decompiler
+from reakit.runtime import RuntimeExtractor
+from reakit.scrcpy import ScrcpyBridge
+from reakit.env import (
     check_environment,
     print_environment_report,
     install_environment,
@@ -18,12 +18,12 @@ from arekit.env import (
 
 def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="are",
-        description="ARE_Kit - Unified Android Reverse Engineering & Automation Framework",
+        prog="rea",
+        description="REA_Kit - Unified Reverse Engineering Android & Automation Framework",
         formatter_class=argparse.RawTextHelpFormatter,
     )
     parser.add_argument("--workspace", "-w", help="Custom workspace root directory (defaults to ./workspaces in CWD)")
-    parser.add_argument("--config", "-c", help="Path to workspace config JSON (defaults to local are.config.json or workspace_config.json)")
+    parser.add_argument("--config", "-c", help="Path to workspace config JSON (defaults to local rea.config.json or workspace_config.json)")
 
     subparsers = parser.add_subparsers(dest="command", help="Available Commands")
 
@@ -116,7 +116,7 @@ def create_parser() -> argparse.ArgumentParser:
     sp_p = subparsers.add_parser(
         "install",
         aliases=["setup", "setup-path"],
-        help="Install & configure ARE_Kit environment, tools, and Windows PATH",
+        help="Install & configure REA_Kit environment, tools, and Windows PATH",
     )
     sp_p.add_argument("--permanent", action="store_true", default=True, help="Permanently configure Windows User PATH and Environment (default)")
     sp_p.add_argument("--session", action="store_true", help="Configure PATH for current session only")
@@ -178,14 +178,14 @@ def main():
                     target = targets[0]
         
         if not target:
-            log_error("No target package specified. Use 'are pull <package_name>' or '--package <package_name>'")
+            log_error("No target package specified. Use 'rea pull <package_name>' or '--package <package_name>'")
             sys.exit(1)
         extractor.extract_package(target)
 
     elif cmd in ("pipeline", "all", "run"):
         target = args.target_pos or args.target
         if not target:
-            log_error("Target package name or Google Play URL is required. Example: are pipeline com.example.app")
+            log_error("Target package name or Google Play URL is required. Example: rea pipeline com.example.app")
             sys.exit(1)
 
         pkg = config_mgr.resolve_package_name(target) or target
@@ -261,7 +261,7 @@ def main():
     elif cmd == "target":
         action = args.target_action
         if action == "list" or not action:
-            print(f"\n{Colors.BOLD}ARE_Kit Project Context:{Colors.RESET}")
+            print(f"\n{Colors.BOLD}REA_Kit Project Context:{Colors.RESET}")
             cfg_display = str(config_mgr.config_path) if config_mgr.config_path and config_mgr.config_path.exists() else "In-Memory Default (No local config file)"
             print(f"  * Active Config:  {Colors.CYAN}{cfg_display}{Colors.RESET}")
             print(f"  * Workspace Root: {Colors.CYAN}{config_mgr.workspace_root}{Colors.RESET}")
@@ -327,13 +327,13 @@ def main():
                 link_npm=not getattr(args, "skip_npm", False),
             )
             if added:
-                log_success("Configured PATH for ARE_Kit tools:")
+                log_success("Configured PATH for REA_Kit tools:")
                 for p in added:
                     print(f"    • {p}")
                 if permanent:
-                    log_info("Newly opened terminals will immediately recognize 'are', 'adb', 'scrcpy', 'jadx', and 'apkd'.")
+                    log_info("Newly opened terminals will immediately recognize 'rea', 'adb', 'scrcpy', 'jadx', and 'apkd'.")
             else:
-                log_info("All ARE_Kit tool directories are already configured in User PATH.")
+                log_info("All REA_Kit tool directories are already configured in User PATH.")
             print("")
             print_environment_report()
 

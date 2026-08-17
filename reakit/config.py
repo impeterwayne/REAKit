@@ -1,7 +1,7 @@
 import os
 import json
 from pathlib import Path
-from arekit.utils import extract_package_name, ensure_dir
+from reakit.utils import extract_package_name, ensure_dir
 
 KIT_DIR = Path(__file__).resolve().parent.parent
 BASE_DIR = KIT_DIR  # Alias for backward compatibility
@@ -20,7 +20,7 @@ DEFAULT_STRUCTURE = {
     },
 }
 
-USER_GLOBAL_CONFIG_PATH = Path.home() / ".arekit" / "config.json"
+USER_GLOBAL_CONFIG_PATH = Path.home() / ".reakit" / "config.json"
 DEFAULT_CONFIG_PATH = None
 DEFAULT_TARGETS_PATH = None
 
@@ -33,8 +33,10 @@ def find_config_file(explicit_path: Path | str | None = None) -> Path | None:
     # 1. Look in Current Working Directory
     cwd = Path.cwd()
     candidates = [
-        cwd / "are.config.json",
+        cwd / "rea.config.json",
         cwd / "workspace_config.json",
+        cwd / ".rea.json",
+        cwd / "are.config.json",
         cwd / ".are.json",
         cwd / "config" / "workspace_config.json",
     ]
@@ -42,9 +44,12 @@ def find_config_file(explicit_path: Path | str | None = None) -> Path | None:
         if candidate.is_file():
             return candidate
 
-    # 2. Look in User Home Directory (~/.arekit/config.json)
+    # 2. Look in User Home Directory (~/.reakit/config.json or legacy ~/.arekit/config.json)
     if USER_GLOBAL_CONFIG_PATH.is_file():
         return USER_GLOBAL_CONFIG_PATH
+    legacy_global = Path.home() / ".arekit" / "config.json"
+    if legacy_global.is_file():
+        return legacy_global
 
     return None
 
@@ -125,7 +130,7 @@ class ConfigManager:
             return self._workspace_root_override.resolve()
 
         # 2. Environment variable
-        env_ws = os.environ.get("ARE_WORKSPACE")
+        env_ws = os.environ.get("REA_WORKSPACE") or os.environ.get("ARE_WORKSPACE")
         if env_ws:
             return Path(env_ws).resolve()
 
@@ -141,7 +146,7 @@ class ConfigManager:
                     base_dir = self.config_path.parent
             else:
                 base_dir = Path.cwd()
-            root_path = base_dir / root_path
+                root_path = base_dir / root_path
         return root_path.resolve()
 
     def set_workspace_root(self, path: Path | str):

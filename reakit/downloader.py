@@ -1,9 +1,9 @@
 import os
 import subprocess
 from pathlib import Path
-from arekit.config import ConfigManager, CORE_DIR
-from arekit.workspace import WorkspaceManager
-from arekit.utils import extract_package_name, log_info, log_success, log_warn, log_error
+from reakit.config import ConfigManager, CORE_DIR
+from reakit.workspace import WorkspaceManager
+from reakit.utils import extract_package_name, log_info, log_success, log_warn, log_error
 
 class Downloader:
     def __init__(self, config_mgr: ConfigManager | None = None, apkd_path: Path | str | None = None):
@@ -92,7 +92,7 @@ class Downloader:
 
         if not lines:
             log_warn("No targets found to download.")
-            log_info("Tip: Run 'are dl <package_or_url>' or 'are target add <package_or_url>'.")
+            log_info("Tip: Run 'rea dl <package_or_url>' or 'rea target add <package_or_url>'.")
             return 0
 
         success_count = 0

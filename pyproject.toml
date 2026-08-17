@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "arekit"
+name = "reakit"
 version = "2.0.0"
-description = "Unified Android Reverse Engineering & Automation Framework"
+description = "Unified Reverse Engineering Android & Automation Framework"
 readme = "README.md"
 requires-python = ">=3.8"
 authors = [
@@ -21,11 +21,10 @@ classifiers = [
 dependencies = []
 
 [project.scripts]
-are = "arekit.cli:main"
-arekit = "arekit.cli:main"
-scrcpy-cli = "arekit.scrcpy:scrcpy_cli_main"
+rea = "reakit.cli:main"
+reakit = "reakit.cli:main"
+scrcpy-cli = "reakit.scrcpy:scrcpy_cli_main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["arekit*"]
-
+include = ["reakit*"]

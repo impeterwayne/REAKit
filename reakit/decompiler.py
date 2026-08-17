@@ -3,8 +3,8 @@ import shutil
 import zipfile
 import subprocess
 from pathlib import Path
-from arekit.config import ConfigManager, CORE_DIR
-from arekit.utils import log_info, log_success, log_warn, log_error
+from reakit.config import ConfigManager, CORE_DIR
+from reakit.utils import log_info, log_success, log_warn, log_error
 
 class Decompiler:
     def __init__(self, config_mgr: ConfigManager | None = None, jadx_path: Path | str | None = None):
@@ -182,7 +182,7 @@ class Decompiler:
 
         if not lines:
             log_warn("No targets found to decompile.")
-            log_info("Tip: Run 'are decode <package_or_url>' or 'are target add <package_or_url>'.")
+            log_info("Tip: Run 'rea decode <package_or_url>' or 'rea target add <package_or_url>'.")
             return 0
 
         success_count = 0

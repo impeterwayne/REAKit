@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Runtime data extraction script (backward-compatible wrapper around arekit)."""
+"""Runtime data extraction script (backward-compatible wrapper around reakit)."""
 import os
 import sys
 import argparse
@@ -8,8 +8,8 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE_DIR))
 
-from arekit.config import ConfigManager
-from arekit.runtime import RuntimeExtractor
+from reakit.config import ConfigManager
+from reakit.runtime import RuntimeExtractor
 
 def main():
     parser = argparse.ArgumentParser(description="Extract sandbox runtime data via ADB (using package name)")

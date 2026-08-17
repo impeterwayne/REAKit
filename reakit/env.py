@@ -3,7 +3,7 @@ import sys
 import shutil
 import subprocess
 from pathlib import Path
-from arekit.utils import Colors, log_info, log_success, log_warn, log_error
+from reakit.utils import Colors, log_info, log_success, log_warn, log_error
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 CORE_DIR = BASE_DIR / "core"
@@ -217,7 +217,7 @@ def check_environment() -> dict:
 def print_environment_report():
     """Prints a formatted report of all prerequisites and tools."""
     results = check_environment()
-    print(f"\n{Colors.BOLD}ARE_Kit System & Environment Diagnostics:{Colors.RESET}\n")
+    print(f"\n{Colors.BOLD}REA_Kit System & Environment Diagnostics:{Colors.RESET}\n")
     print(f"{'Component':<28} | {'Status':<10} | {'Details'}")
     print("-" * 80)
     
@@ -279,13 +279,13 @@ def install_scrcpy_cli() -> bool:
         return False
 
 def install_pip_package() -> bool:
-    """Installs ARE_Kit Python package in editable mode via pip."""
+    """Installs REA_Kit Python package in editable mode via pip."""
     pip_path = shutil.which("pip") or sys.executable
     pyproject_file = BASE_DIR / "pyproject.toml"
     if not pyproject_file.exists():
         return False
 
-    log_info("[*] Installing ARE_Kit Python package in editable mode via pip...")
+    log_info("[*] Installing REA_Kit Python package in editable mode via pip...")
     try:
         if pip_path == sys.executable:
             cmd = [sys.executable, "-m", "pip", "install", "-e", str(BASE_DIR), "--no-deps", "--quiet"]
@@ -293,17 +293,17 @@ def install_pip_package() -> bool:
             cmd = [pip_path, "install", "-e", str(BASE_DIR), "--no-deps", "--quiet"]
         res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         if res.returncode == 0:
-            log_success("ARE_Kit CLI ('are' and 'arekit') registered in Python environment.")
+            log_success("REA_Kit CLI ('rea' and 'reakit') registered in Python environment.")
             return True
         else:
             log_warn(f"pip install exited with code {res.returncode}: {res.stderr.strip()}")
             return False
     except Exception as e:
-        log_warn(f"Failed to install ARE_Kit via pip: {e}")
+        log_warn(f"Failed to install REA_Kit via pip: {e}")
         return False
 
 def install_environment(permanent: bool = True, install_pip: bool = True, link_npm: bool = True) -> list[str]:
-    """Complete ARE_Kit installation: registers PATH, configures environment variables, links scrcpy-cli, and installs Python package."""
+    """Complete REA_Kit installation: registers PATH, configures environment variables, links scrcpy-cli, and installs Python package."""
     dirs_to_add = get_path_directories()
     added_paths = []
 
@@ -311,7 +311,7 @@ def install_environment(permanent: bool = True, install_pip: bool = True, link_n
     if link_npm:
         install_scrcpy_cli()
 
-    # 2. Install ARE_Kit Python package
+    # 2. Install REA_Kit Python package
     if install_pip:
         install_pip_package()
 
@@ -375,5 +375,3 @@ def install_environment(permanent: bool = True, install_pip: bool = True, link_n
 def setup_windows_user_path(permanent: bool = True) -> list[str]:
     """Backwards-compatible alias for install_environment."""
     return install_environment(permanent=permanent)
-
-

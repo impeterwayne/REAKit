@@ -2,8 +2,8 @@ import os
 import shlex
 import subprocess
 from pathlib import Path
-from arekit.config import ConfigManager
-from arekit.utils import (
+from reakit.config import ConfigManager
+from reakit.utils import (
     extract_package_name,
     get_safe_relative_parts,
     ensure_dir,

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bytecode decompilation script (backward-compatible wrapper around arekit)."""
+"""Bytecode decompilation script (backward-compatible wrapper around reakit)."""
 import os
 import sys
 import argparse
@@ -8,8 +8,8 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE_DIR))
 
-from arekit.config import ConfigManager
-from arekit.decompiler import Decompiler
+from reakit.config import ConfigManager
+from reakit.decompiler import Decompiler
 
 def main():
     parser = argparse.ArgumentParser(description="Decode targets using jadx")
