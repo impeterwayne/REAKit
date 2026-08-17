@@ -5,7 +5,7 @@
 Clone the repository with submodules and run the main installer:
 
 ```bash
-git clone --recurse-submodules https://github.com/impeterwayne/REA_Kit.git
+git clone --recurse-submodules https://github.com/impeterwayne/REAKit.git
 cd REA_Kit
 python rea.py install
 ```
