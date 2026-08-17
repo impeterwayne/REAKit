@@ -1,4 +1,4 @@
-# Reverse Engineering Android Kit (REA_Kit)
+# Reverse Engineering Android Kit (REAKit)
 ---
 ## Installation & Setup
 
