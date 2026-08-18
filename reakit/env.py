@@ -257,6 +257,14 @@ def install_scrcpy_cli() -> bool:
         log_warn("npm was not found in PATH. Skipping global scrcpy-cli linking.")
         return False
 
+    node_modules = scrcpy_cli_dir / "node_modules"
+    if not node_modules.exists():
+        log_info("[*] Installing scrcpy-cli dependencies (npm install)...")
+        try:
+            subprocess.run([npm_path, "install"], cwd=str(scrcpy_cli_dir), check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        except Exception as e:
+            log_warn(f"Failed to install scrcpy-cli dependencies: {e}")
+
     dist_file = scrcpy_cli_dir / "dist" / "index.js"
     if not dist_file.exists():
         log_info("[*] Building scrcpy-cli...")
@@ -267,7 +275,7 @@ def install_scrcpy_cli() -> bool:
 
     log_info("[*] Registering scrcpy-cli globally via npm link...")
     try:
-        res = subprocess.run([npm_path, "link"], cwd=str(scrcpy_cli_dir), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        res = subprocess.run([npm_path, "link", "--force"], cwd=str(scrcpy_cli_dir), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         if res.returncode == 0:
             log_success("Global 'scrcpy-cli' command registered successfully.")
             return True

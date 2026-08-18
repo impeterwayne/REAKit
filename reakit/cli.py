@@ -329,7 +329,7 @@ def main():
             if added:
                 log_success("Configured PATH for REA_Kit tools:")
                 for p in added:
-                    print(f"    • {p}")
+                    print(f"    * {p}")
                 if permanent:
                     log_info("Newly opened terminals will immediately recognize 'rea', 'adb', 'scrcpy', 'jadx', and 'apkd'.")
             else:
