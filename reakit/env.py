@@ -212,6 +212,39 @@ def check_environment() -> dict:
         "status": "ok" if scrcpy_cli_dist.exists() else "missing",
     }
 
+    # 9. Ghidra (backend for native .so analysis)
+    # Imported lazily: reakit.native imports reakit.config, not reakit.env.
+    from reakit.native import (
+        find_ghidra_home,
+        find_ghidra_mcp_jar,
+        find_mcp_bridge,
+        ghidra_version,
+    )
+
+    ghidra_home = find_ghidra_home()
+    results["ghidra"] = {
+        "name": "Ghidra (Native Analysis)",
+        "version": ghidra_version(ghidra_home) or "Unknown",
+        "path": str(ghidra_home) if ghidra_home else "Not found (set GHIDRA_HOME)",
+        "status": "ok" if ghidra_home else "missing",
+    }
+
+    # 10. GhidraMCP plugin jar - powers 'rea native serve'
+    jar = find_ghidra_mcp_jar(ghidra_home)
+    results["ghidra_mcp_jar"] = {
+        "name": "GhidraMCP Plugin Jar",
+        "path": str(jar) if jar else "Not built (rea native build)",
+        "status": "ok" if jar else "missing",
+    }
+
+    # 11. GhidraMCP MCP bridge - optional, for AI clients
+    bridge = find_mcp_bridge()
+    results["ghidra_mcp_bridge"] = {
+        "name": "GhidraMCP MCP Bridge",
+        "path": " ".join(bridge) if bridge else "Not installed (optional)",
+        "status": "ok" if bridge else "warning",
+    }
+
     return results
 
 def print_environment_report():

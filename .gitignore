@@ -45,3 +45,15 @@ venv/
 # Build artifacts & temp
 *.tmp
 *.log
+
+# Target workspaces (APKs, decompiled sources, extracted .so files)
+workspaces/
+
+# Native analysis backends (large, install locally via 'rea native build')
+core/ghidra/
+core/ghidra_mcp/
+core/jdk*/
+
+# Ghidra headless projects and extracted native libraries live in workspaces/
+*.gpr
+*.rep/

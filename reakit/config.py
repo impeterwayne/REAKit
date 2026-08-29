@@ -13,6 +13,7 @@ DEFAULT_STRUCTURE = {
     "apks": "apks",
     "jadx": "jadx_src",
     "docs": "docs",
+    "native": "native",
     "runtime": {
         "base": "runtime",
         "internal": "runtime/internal",
@@ -238,11 +239,16 @@ class ConfigManager:
             internal_rel = "runtime/internal"
             external_rel = "runtime/external"
 
+        native_struct = struct.get("native", "native")
+        native_rel = native_struct.get("base", "native") if isinstance(native_struct, dict) else native_struct
+
         return {
             "root": app_root,
             "apks": app_root / apks_rel,
             "jadx": app_root / jadx_rel,
             "docs": app_root / docs_rel,
+            "native": app_root / native_rel,
+            "ghidra_project": app_root / native_rel / "ghidra_project",
             "runtime_internal": app_root / internal_rel,
             "runtime_external": app_root / external_rel,
             "target_info": app_root / "target_info.txt",

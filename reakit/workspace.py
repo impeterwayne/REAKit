@@ -101,11 +101,13 @@ class WorkspaceManager:
                 apk_count = len(list(paths["apks"].glob("*.apk"))) + len(list(paths["apks"].glob("*.xapk"))) + len(list(paths["apks"].glob("*.apks"))) if paths["apks"].exists() else 0
                 decompiled = paths["jadx"].exists() and bool(list(paths["jadx"].iterdir()))
                 runtime_files = sum(1 for _ in paths["runtime_internal"].rglob("*") if _.is_file()) if paths["runtime_internal"].exists() else 0
+                native_libs = len(list(paths["native"].rglob("*.so"))) if paths["native"].exists() else 0
                 workspaces.append({
                     "package": item.name,
                     "path": item,
                     "apks": apk_count,
                     "decompiled": decompiled,
+                    "native_libs": native_libs,
                     "runtime_files": runtime_files,
                 })
         return workspaces

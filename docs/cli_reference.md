@@ -28,6 +28,7 @@ These options apply across all relevant subcommands:
 | [`rea init`](#1-rea-init) | | Provision workspace directories for targets | `rea init com.example.app` |
 | [`rea download`](#2-rea-download--rea-dl) | `dl` | Download APK/XAPK packages via `apkd` | `rea dl com.example.app` |
 | [`rea decode`](#3-rea-decode--rea-decompile) | `decompile` | Decompile APKs into Java Gradle projects via JADX | `rea decode com.example.app` |
+| [`rea native`](./native_analysis.md) | `so`, `nat` | Extract `.so` libraries and analyze them via headless/GUI Ghidra (GhidraMCP) | `rea native serve com.example.app --lib libfoo -d` |
 | [`rea pull`](#4-rea-pull--rea-runtime) | `runtime` | Extract app sandbox files via ADB (root/su/run-as) | `rea pull com.example.app` |
 | [`rea pipeline`](#5-rea-pipeline--rea-all--rea-run) | `all`, `run` | Execute complete static pipeline (init -> dl -> decode) | `rea pipeline -t com.example.app` |
 | [`rea scrcpy`](#6-rea-scrcpy--rea-control) | `control` | Low-latency device automation via `scrcpy-cli` | `rea scrcpy tap 500 1200` |

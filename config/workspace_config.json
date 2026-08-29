@@ -4,6 +4,7 @@
     "apks": "apks",
     "jadx": "jadx_src",
     "docs": "docs",
+    "native": "native",
     "runtime": {
       "base": "runtime",
       "internal": "runtime/internal",
@@ -22,6 +23,11 @@
     {
       "packageName": "com.nashstore",
       "alias": "Nashstore"
+    },
+    {
+      "packageName": "com.ss.android.ugc.trill",
+      "alias": "Trill"
     }
-  ]
+  ],
+  "ghidraHome": "core/ghidra/ghidra_12.1.3_PUBLIC"
 }

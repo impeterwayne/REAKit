@@ -32,6 +32,13 @@ flowchart TD
         S1 --> S2 --> S3
     end
 
+    subgraph Native ["Native Analysis (rea native)"]
+        direction TB
+        N1["<b>rea native extract</b><br/><i>.so extraction + ELF fingerprint</i>"]
+        N2["<b>rea native import / serve</b><br/><i>Headless Ghidra + GhidraMCP :8089</i>"]
+        N1 --> N2
+    end
+
     subgraph Dynamic ["Dynamic Analysis Loop"]
         direction TB
         S4["<b>4. rea scrcpy</b><br/><i>Device Control & UI Automation</i>"]
@@ -41,11 +48,14 @@ flowchart TD
         S5 -->|Iterate / Next Action| S4
     end
 
+    Static --> Native
     Static --> Dynamic
 
     Static --> WS[(Target Workspace)]
+    Native --> WS
     S5 --> WS
     S4 <--> DEV[(Android Device / Emulator)]
+    N2 <--> GH[(Ghidra GUI / MCP bridge / CLI)]
 ```
 
 ---
@@ -58,7 +68,8 @@ flowchart TD
 4. **[Target Downloading Guide](./docs/downloading_targets.md)** - Automated APK downloading via `apkd`.
 5. **[Bytecode Decompilation & JADX Guide](./docs/decompilation.md)** - JADX memory safeguards, split APK merging, and decompilation.
 6. **[Runtime Extraction Guide](./docs/runtime_extraction.md)** - ADB privilege escalation (native root, Magisk su, run-as) and sandbox pulling.
-7. **[Configuration Schema Guide](./docs/workspace_config.md)** - Central `workspace_config.json` schema details.
+7. **[Native Library Analysis Guide](./docs/native_analysis.md)** - `.so` extraction, ELF/packer fingerprinting, and headless-or-GUI Ghidra analysis via GhidraMCP.
+8. **[Configuration Schema Guide](./docs/workspace_config.md)** - Central `workspace_config.json` schema details.
 
 ---
 
@@ -67,6 +78,7 @@ flowchart TD
 To run all capabilities of `REA_Kit`, ensure the following packages are installed:
 
 * **Python 3.8+** (runs the `reakit` engine).
-* **Java Development Kit (JDK) 11+** (required for `JADX` decompiler and `APKTool`).
+* **Java Development Kit (JDK) 11+** (required for `JADX` decompiler and `APKTool`; **JDK 21** for native analysis with Ghidra).
 * **Node.js 22+** (required for `scrcpy-cli` device automation).
 * **A Connected Device or Emulator** (physical device, Genymotion, or Android Studio AVD).
+* **Ghidra 12.x + Maven** (optional, only for `rea native` — see the [Native Library Analysis Guide](./docs/native_analysis.md)).
