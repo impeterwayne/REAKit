@@ -21,7 +21,19 @@ bridge, `claude mcp add`) is identical either way:
   drives the same program.
 
 The port is a **server**; the CLI and the MCP bridge are **clients** that dial it. They meet at
-`GHIDRA_MCP_URL` (default `http://127.0.0.1:8089`) and never talk to each other directly.
+`GHIDRA_MCP_URL` and never talk to each other directly.
+
+**Two predefined ports** so the GUI and a headless server can run at the same time without
+colliding:
+
+| Backend | Default port | Configure | Notes |
+|---|---|---|---|
+| GUI plugin | **8089** | `ghidraGuiPort` / `GHIDRA_GUI_PORT` | the GhidraMCP plugin's own fixed default |
+| Headless server | **8192** | `ghidraHeadlessPort` / `GHIDRA_HEADLESS_PORT` | what `rea native serve` uses, and the CLI's default query URL |
+
+The CLI defaults to the **headless** port (8192). To drive a GUI-hosted plugin instead, point at
+its port: `rea native functions --url http://127.0.0.1:8089` or `export GHIDRA_MCP_URL=…:8089`.
+`rea native setup` probes both and tells you which is live.
 
 ```mermaid
 flowchart LR
@@ -42,10 +54,14 @@ flowchart LR
 
 | Requirement | Notes |
 |---|---|
-| **Ghidra 12.x** | Unzip into `core/ghidra/`, or set `GHIDRA_HOME`, or put `"ghidraHome": "<dir>"` in `workspace_config.json` (relative paths resolve against the project root). |
+| **Ghidra 12.x** | A downloaded release **binary** (~875 MB) — gitignored, not committed. Get it with `rea native fetch-ghidra`, or set `GHIDRA_HOME` / `"ghidraHome": "<dir>"` in `workspace_config.json` to point at an existing install (relative paths resolve against the project root). |
 | **JDK 21** | Taken from the machine. REA_Kit prefers a JDK 21 found in `JAVA_HOME`, on `PATH`, or under the usual multi-JDK roots (`C:\Program Files\Java`, `~/.jdks`, `/usr/lib/jvm`, …). Override with `REA_JAVA`. |
 | **Maven 3.9+** | Only needed to build the plugin jar. |
-| **GhidraMCP checkout** | `git clone https://github.com/bethington/ghidra-mcp core/ghidra_mcp` |
+| **GhidraMCP** | A **git submodule** at `core/ghidra_mcp` → [bethington/ghidra-mcp](https://github.com/bethington/ghidra-mcp). Pulled by `git clone --recurse-submodules`, or `git submodule update --init core/ghidra_mcp`. |
+
+> **Why not bundle Ghidra in the repo?** It's an 875 MB / 5,000-file release binary (with
+> individual jars near GitHub's 100 MB file limit). Like the JDK, it's fetched, not committed.
+> GhidraMCP *is* source, so it's a pinned submodule. Small tools (jadx, apktool) stay vendored.
 
 ```bash
 rea native build      # installs Ghidra jars into ~/.m2, builds GhidraMCP.jar,

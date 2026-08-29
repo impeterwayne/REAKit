@@ -18,6 +18,8 @@ from reakit.env import (
     inject_runtime_path,
 )
 from reakit.native import (
+    DEFAULT_GUI_PORT,
+    DEFAULT_HEADLESS_PORT,
     DEFAULT_MCP_URL,
     GhidraMcpClient,
     GhidraMcpServer,
@@ -25,7 +27,10 @@ from reakit.native import (
     NativeExtractor,
     build_ghidra_mcp,
     doctor,
+    fetch_ghidra,
     find_ghidra_home,
+    gui_port,
+    headless_port,
     ghidra_version,
     human_size,
     gui_extension_installed,
@@ -121,9 +126,13 @@ def _add_native_parser(subparsers):
     build_p.add_argument("--bridge-only", action="store_true", help="Only pip-install the MCP bridge package")
     build_p.add_argument("--no-bridge", action="store_true", help="Only build the jar, skip the MCP bridge")
 
+    fg_p = native_sub.add_parser("fetch-ghidra", help="Download a Ghidra release into core/ghidra (gitignored)")
+    fg_p.add_argument("--tag", help="Release tag, e.g. Ghidra_12.1.3_build (default: latest)")
+    fg_p.add_argument("--dest", help="Destination dir (default core/ghidra)")
+
     setup_p = native_sub.add_parser("setup", aliases=["doctor"], help="Check Ghidra, plugin jar, bridge and server")
     setup_p.add_argument("--ghidra-home", help="Ghidra installation directory to validate")
-    setup_p.add_argument("--port", type=int, default=8089, help="Server port to probe")
+    setup_p.add_argument("--port", type=int, default=None, help="Probe only this port (default: both GUI + headless)")
 
     # --- server lifecycle ---
     serve_p = native_sub.add_parser(
@@ -135,7 +144,7 @@ def _add_native_parser(subparsers):
     serve_p.add_argument("--file", "-f", help="Load this binary path directly")
     serve_p.add_argument("--project", help="Ghidra project directory to open")
     serve_p.add_argument("--program", help="Program name inside the project")
-    serve_p.add_argument("--port", type=int, default=8089, help="Listen port (default 8089)")
+    serve_p.add_argument("--port", type=int, default=None, help=f"Listen port (default headless {DEFAULT_HEADLESS_PORT}; config: ghidraHeadlessPort)")
     serve_p.add_argument("--bind", default="127.0.0.1", help="Bind address (default 127.0.0.1)")
     serve_p.add_argument("--heap", default="4g", help="JVM max heap (default 4g)")
     serve_p.add_argument("--background", "-d", action="store_true", help="Run detached and wait until the API answers")
@@ -171,7 +180,7 @@ def _add_native_parser(subparsers):
     gui_p.add_argument("--ghidra-home", help="Ghidra installation directory")
 
     stop_p = native_sub.add_parser("stop", help="Stop the background GhidraMCP server")
-    stop_p.add_argument("--port", type=int, default=8089, help="Port of the server to stop")
+    stop_p.add_argument("--port", type=int, default=None, help="Port of the server to stop (default: headless port)")
 
     load_p = native_sub.add_parser("load", help="Load a .so into an already running server")
     _add_target_args(load_p)
@@ -464,6 +473,10 @@ def _run_native(args, config_mgr) -> int:
         return show_info(so_path)
 
     # ---------- setup ----------
+    if action == "fetch-ghidra":
+        home = fetch_ghidra(dest=args.dest, tag=args.tag)
+        return 0 if home else 1
+
     if action == "build":
         ok = True
         if not args.bridge_only:
@@ -571,7 +584,7 @@ def _run_native(args, config_mgr) -> int:
             config_mgr,
             ghidra_home=args.ghidra_home,
             jar=args.jar,
-            port=args.port,
+            port=args.port or headless_port(config_mgr),
             bind=args.bind,
             heap=args.heap,
             java=args.java,
@@ -585,7 +598,7 @@ def _run_native(args, config_mgr) -> int:
         )
 
     if action == "stop":
-        return GhidraMcpServer(config_mgr, port=args.port).stop()
+        return GhidraMcpServer(config_mgr, port=args.port or headless_port(config_mgr)).stop()
 
     if action == "load":
         so_path = _resolve_native_so(args, config_mgr)

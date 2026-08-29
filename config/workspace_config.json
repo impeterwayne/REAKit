@@ -29,5 +29,7 @@
       "alias": "Trill"
     }
   ],
-  "ghidraHome": "core/ghidra/ghidra_12.1.3_PUBLIC"
+  "ghidraHome": "core/ghidra/ghidra_12.1.3_PUBLIC",
+  "ghidraGuiPort": 8089,
+  "ghidraHeadlessPort": 8192
 }

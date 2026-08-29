@@ -7,7 +7,7 @@ This module covers the native half of an Android target:
   a dependency-free ELF parser.
 * :class:`GhidraMcpServer` runs the GUI-free GhidraMCP backend
   (``com.xebyte.headless.GhidraMCPHeadlessServer``) from core/ghidra_mcp with a
-  chosen ``.so`` loaded, exposing the REST API on ``http://127.0.0.1:8089``.
+  chosen ``.so`` loaded, exposing the REST API on the headless port (default 8192).
 * :class:`GhidraMcpClient` turns that API into CLI commands, driven by the
   upstream endpoint spec, so every MCP tool is reachable from the shell - and
   the same server also backs the MCP bridge used by AI clients.
@@ -40,7 +40,35 @@ from reakit.utils import (
     sanitize_filename,
 )
 
-DEFAULT_MCP_URL = "http://127.0.0.1:8089"
+# Predefined ports: the Ghidra GUI plugin serves its fixed default (8089); the
+# headless server uses a separate port so both can run at once without colliding.
+DEFAULT_GUI_PORT = 8089
+DEFAULT_HEADLESS_PORT = 8192
+DEFAULT_MCP_URL = f"http://127.0.0.1:{DEFAULT_HEADLESS_PORT}"
+
+
+def _config_port(config_mgr: "ConfigManager | None", key: str, env: str, fallback: int) -> int:
+    """Resolves a port: env var > config value > fallback constant."""
+    val = os.environ.get(env)
+    if val and val.isdigit():
+        return int(val)
+    if config_mgr is not None:
+        cfg = config_mgr.config_data.get(key)
+        if isinstance(cfg, int):
+            return cfg
+        if isinstance(cfg, str) and cfg.isdigit():
+            return int(cfg)
+    return fallback
+
+
+def gui_port(config_mgr: "ConfigManager | None" = None) -> int:
+    """The port the Ghidra GUI plugin serves on (config: ghidraGuiPort)."""
+    return _config_port(config_mgr, "ghidraGuiPort", "GHIDRA_GUI_PORT", DEFAULT_GUI_PORT)
+
+
+def headless_port(config_mgr: "ConfigManager | None" = None) -> int:
+    """The port `rea native serve` listens on (config: ghidraHeadlessPort)."""
+    return _config_port(config_mgr, "ghidraHeadlessPort", "GHIDRA_HEADLESS_PORT", DEFAULT_HEADLESS_PORT)
 
 # Android ABI directory names, in preference order for analysis.
 ABI_PREFERENCE = (
@@ -960,6 +988,78 @@ def ghidra_version(ghidra_home: Path | str | None) -> str | None:
     return None
 
 
+GHIDRA_RELEASES_API = "https://api.github.com/repos/NationalSecurityAgency/ghidra/releases"
+
+
+def fetch_ghidra(dest: Path | str | None = None, tag: str | None = None) -> Path | None:
+    """Downloads a Ghidra release binary into core/ghidra and unzips it.
+
+    Ghidra is distributed as a large release ZIP (not a source tree you can
+    submodule), so - like the bundled jadx/apktool/JDK - it is fetched on demand
+    and gitignored. The GhidraMCP plugin, by contrast, is a git submodule.
+    """
+    dest = Path(dest) if dest else (CORE_DIR / "ghidra")
+    existing = find_ghidra_home(ConfigManager())
+    if existing:
+        log_info(f"Ghidra already present: {existing} (delete it to re-fetch)")
+        return Path(existing)
+
+    api = f"{GHIDRA_RELEASES_API}/tags/{tag}" if tag else f"{GHIDRA_RELEASES_API}/latest"
+    log_info(f"Resolving Ghidra release from {api} ...")
+    try:
+        req = urlrequest.Request(api, headers={"Accept": "application/vnd.github+json"})
+        with urlrequest.urlopen(req, timeout=60) as resp:
+            release = json.loads(resp.read().decode("utf-8"))
+    except (urlerror.URLError, json.JSONDecodeError) as exc:
+        log_error(f"Could not query the Ghidra releases API: {exc}")
+        return None
+
+    asset = next(
+        (a for a in release.get("assets", []) if a["name"].endswith(".zip") and "PUBLIC" in a["name"]),
+        None,
+    )
+    if not asset:
+        log_error("No Ghidra .zip asset found in that release.")
+        return None
+
+    ensure_dir(dest)
+    archive = dest / asset["name"]
+    size_mb = asset.get("size", 0) / 1e6
+    log_info(f"Downloading {asset['name']} (~{size_mb:.0f} MB) -> {dest}")
+    started = time.time()
+
+    def _progress(block, block_size, total):
+        if total > 0 and block % 200 == 0:
+            done = block * block_size
+            pct = min(100, done * 100 // total)
+            print(f"\r  {pct:3d}%  {done/1e6:6.0f}/{total/1e6:.0f} MB", end="", flush=True)
+
+    try:
+        urlrequest.urlretrieve(asset["browser_download_url"], archive, reporthook=_progress)
+        print()
+    except (urlerror.URLError, OSError) as exc:
+        print()
+        log_error(f"Download failed: {exc}")
+        return None
+
+    log_info(f"Unzipping (this takes a minute) ...")
+    try:
+        with zipfile.ZipFile(archive) as zf:
+            zf.extractall(dest)
+    except (zipfile.BadZipFile, OSError) as exc:
+        log_error(f"Unzip failed: {exc}")
+        return None
+    finally:
+        archive.unlink(missing_ok=True)
+
+    home = find_ghidra_home(ConfigManager())
+    if home:
+        log_success(f"Ghidra ready in {time.time()-started:.0f}s: {home}")
+        return Path(home)
+    log_error("Unzipped, but no Ghidra install was detected under core/ghidra.")
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Java runtime selection (Ghidra 12.x + GhidraMCP target JDK 21)
 # ---------------------------------------------------------------------------
@@ -1286,7 +1386,7 @@ class GhidraProject:
         log_info(f"Launching Ghidra GUI: {' '.join(cmd)}")
         log_dim(
             "In the GUI, enable the MCP plugin once via File > Configure > Miscellaneous > "
-            "GhidraMCPPlugin; it then serves http://127.0.0.1:8089 for the bridge and CLI."
+            f"GhidraMCPPlugin; it then serves http://127.0.0.1:{gui_port(self.config_mgr)} for the bridge and CLI."
         )
         # ghidraRun refuses to start if it inherits a redirected stdin, so detach
         # the child from this process's console/pipes and let it run on its own.
@@ -1546,7 +1646,7 @@ class GhidraMcpServer:
         config_mgr: ConfigManager | None = None,
         ghidra_home: Path | str | None = None,
         jar: Path | str | None = None,
-        port: int = 8089,
+        port: int = DEFAULT_HEADLESS_PORT,
         bind: str = "127.0.0.1",
         heap: str = "4g",
         java: Path | str | None = None,
@@ -2088,18 +2188,19 @@ def print_ghidra_setup_help():
         f"""
 {Colors.BOLD}Native analysis setup (one time):{Colors.RESET}
 
-  1. Ghidra 12.x (JDK 21):
-       {Colors.CYAN}https://github.com/NationalSecurityAgency/ghidra/releases{Colors.RESET}
-     Unzip into {Colors.CYAN}{CORE_DIR / 'ghidra'}{Colors.RESET}, or set {Colors.CYAN}GHIDRA_HOME{Colors.RESET},
-     or add {Colors.CYAN}"ghidraHome": "<dir>"{Colors.RESET} to workspace_config.json.
+  1. Ghidra 12.x (JDK 21) - a downloaded binary, gitignored, NOT bundled in the repo:
+       {Colors.CYAN}rea native fetch-ghidra{Colors.RESET}     download the release into {CORE_DIR / 'ghidra'}
+     ...or set {Colors.CYAN}GHIDRA_HOME{Colors.RESET} / add {Colors.CYAN}"ghidraHome": "<dir>"{Colors.RESET} to workspace_config.json
+     to point at an existing install.
 
-  2. GhidraMCP (cloned into {Colors.CYAN}core/ghidra_mcp{Colors.RESET}):
+  2. GhidraMCP - a git submodule at {Colors.CYAN}core/ghidra_mcp{Colors.RESET} (git submodule update --init):
        {Colors.CYAN}rea native build{Colors.RESET}      builds the plugin jar and installs the MCP bridge
 
   3. Verify:
        {Colors.CYAN}rea native setup{Colors.RESET}
 
-{Colors.BOLD}Then, two interchangeable front ends over the same :8089 API:{Colors.RESET}
+{Colors.BOLD}Two front ends on predefined ports (both can run at once):{Colors.RESET}
+  headless server -> :{DEFAULT_HEADLESS_PORT}   GUI plugin -> :{DEFAULT_GUI_PORT}
 
   {Colors.CYAN}rea native extract <pkg>{Colors.RESET}                     pull .so files out of the APKs
 
@@ -2113,12 +2214,12 @@ def print_ghidra_setup_help():
   {Colors.CYAN}rea native serve <pkg> --from-project{Colors.RESET}        reuse that project headlessly (no re-analysis)
 
   {Colors.BOLD}For AI clients (either backend):{Colors.RESET}
-  {Colors.CYAN}rea native mcp{Colors.RESET}                               MCP bridge -> the same :8089 server
+  {Colors.CYAN}rea native mcp{Colors.RESET}                               MCP bridge -> either server (set GHIDRA_MCP_URL)
 """
     )
 
 
-def doctor(config_mgr: ConfigManager, ghidra_home: Path | str | None = None, port: int = 8089) -> int:
+def doctor(config_mgr: ConfigManager, ghidra_home: Path | str | None = None, port: int | None = None) -> int:
     """Reports the state of every native-analysis prerequisite."""
     print("")
     home = Path(ghidra_home) if ghidra_home else find_ghidra_home(config_mgr)
@@ -2180,21 +2281,28 @@ def doctor(config_mgr: ConfigManager, ghidra_home: Path | str | None = None, por
     else:
         log_warn("Maven not found - required only when building GhidraMCP.")
 
-    client = GhidraMcpClient(base_url=f"http://127.0.0.1:{port}")
-    try:
-        status, text = client.request("/check_connection")
-        if status < 400:
-            log_success(f"Server live on port {port}: {text.strip()[:80]}")
-            try:
-                _, info = client.request("/get_current_program_info")
-                loaded = info.strip()
-                log_info(f"Loaded program: {loaded[:200] if loaded else 'none'}")
-            except ConnectionError:
-                pass
-        else:
-            log_warn(f"Server on port {port} replied HTTP {status}")
-    except ConnectionError:
-        log_info(f"No server on port {port} yet - start one with: rea native serve <pkg> -d")
+    # Probe both predefined ports: the GUI plugin and the headless server.
+    probes = [("GUI plugin", gui_port(config_mgr)), ("headless server", headless_port(config_mgr))]
+    if port is not None:
+        probes = [("server", port)]
+    for label, p in probes:
+        client = GhidraMcpClient(base_url=f"http://127.0.0.1:{p}")
+        try:
+            status, text = client.request("/check_connection")
+            if status < 400:
+                log_success(f"{label} live on :{p}: {text.strip()[:70]}")
+                try:
+                    _, info = client.request("/get_current_program_info")
+                    loaded = info.strip()
+                    if loaded:
+                        log_dim(f"    loaded program: {loaded[:160]}")
+                except ConnectionError:
+                    pass
+            else:
+                log_warn(f"{label} on :{p} replied HTTP {status}")
+        except ConnectionError:
+            hint = "rea native gui <pkg> + enable the plugin" if "GUI" in label else "rea native serve <pkg> -d"
+            log_info(f"No {label} on :{p} ({hint})")
 
     if not ok:
         print_ghidra_setup_help()
