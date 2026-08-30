@@ -57,3 +57,8 @@ core/jdk*/
 # Ghidra headless projects and extracted native libraries live in workspaces/
 *.gpr
 *.rep/
+
+# Compiled apkd downloader binaries
+core/apkdgo/bin/
+core/apkdgo/build/
+core/apkdgo/apkd/apkd

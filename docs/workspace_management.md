@@ -22,6 +22,10 @@ workspaces/<package_name>/
 │   │       └── resources/
 │   ├── build.gradle
 │   └── settings.gradle
+├── native/                                    # Extracted native .so libraries & Ghidra projects
+│   ├── arm64-v8a/                             # Per-ABI native shared libraries
+│   ├── ghidra_project/                        # Persistent Ghidra analysis database
+│   └── native_manifest.json                   # ELF fingerprints, packer detection, JNI exports
 ├── docs/                                      # Local analyst notes, flow diagrams, and threat models
 ├── runtime/                                   # Extracted sandbox files (ADB)
 │   ├── internal/                              # /data/data/<package_name> (databases, shared_prefs)

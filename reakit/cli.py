@@ -339,6 +339,7 @@ def create_parser() -> argparse.ArgumentParser:
     sp_p.add_argument("--check", action="store_true", help="Check current environment & PATH status")
     sp_p.add_argument("--skip-pip", action="store_true", help="Skip editable Python package installation (pip install -e .)")
     sp_p.add_argument("--skip-npm", action="store_true", help="Skip scrcpy-cli global linking (npm link)")
+    sp_p.add_argument("--skip-ghidra", action="store_true", help="Skip automatic Ghidra download and GhidraMCP build")
 
     return parser
 
@@ -888,6 +889,7 @@ def main():
                 permanent=permanent,
                 install_pip=not getattr(args, "skip_pip", False),
                 link_npm=not getattr(args, "skip_npm", False),
+                setup_ghidra=not getattr(args, "skip_ghidra", False),
             )
             if added:
                 log_success("Configured PATH for REA_Kit tools:")

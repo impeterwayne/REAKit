@@ -13,9 +13,14 @@ class Downloader:
 
     def _find_apkd(self) -> Path:
         apkd_name = "apkd.exe" if os.name == "nt" else "apkd"
-        bundled = CORE_DIR / "apkdgo" / apkd_name
-        if bundled.exists():
-            return bundled
+        candidates = [
+            CORE_DIR / "apkdgo" / "bin" / apkd_name,
+            CORE_DIR / "apkdgo" / "apkd" / apkd_name,
+            CORE_DIR / "apkdgo" / apkd_name,
+        ]
+        for cand in candidates:
+            if cand.is_file():
+                return cand
         return Path(apkd_name)
 
     def download_package(

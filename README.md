@@ -2,19 +2,70 @@
 ---
 ## Installation & Setup
 
-Clone the repository with submodules and run the main installer:
+### 1. System Dependencies
+
+REAKit bundles matching versions of **`scrcpy` (v4.1)**, **`adb`**, **`jadx`**, and **`apktool`** automatically. You only need the base runtime compilers and runtimes:
+
+* **Linux (Fedora / RHEL)**:
+  ```bash
+  sudo dnf install -y nodejs java-openjdk-devel golang maven
+  ```
+* **Linux (Ubuntu / Debian)**:
+  ```bash
+  sudo apt update && sudo apt install -y nodejs openjdk-21-jdk golang-go maven
+  ```
+* **Linux (Arch)**:
+  ```bash
+  sudo pacman -S nodejs jdk21-openjdk go maven
+  ```
+* **macOS (Homebrew)**:
+  ```bash
+  brew install node openjdk@21 go maven
+  ```
+* **Windows**:
+  * Ensure **Python 3.8+**, **Node.js 22+**, and **JDK 11+ / 21+** are installed and added to `PATH`.
+
+---
+
+### 2. Clone & Initialize REAKit
+
+Clone the repository with submodules and run the installer:
 
 ```bash
 git clone --recurse-submodules https://github.com/impeterwayne/REAKit.git
 cd REAKit
-python rea.py install
+
+# On Linux / macOS:
+./install.sh
+
+# On Windows:
+install.bat
+# (or: python rea.py install)
 ```
 
-> **Windows Batch Alternative**: You can also run `install.bat` from the root directory.
+The installer will automatically set up everything in a single step:
+1. Register `rea` and `reakit` into your Python environment.
+2. Build and link `scrcpy-cli` device automation globally.
+3. Automatically download matching **`scrcpy` & `adb` (v4.1)** native binaries for your OS.
+4. Compile the **`apkd`** APK downloader for your platform via Go.
+5. Fetch the official **Ghidra** distribution and build the **GhidraMCP** plugin jar & MCP bridge.
+6. Configure execution permissions (`chmod +x`) on all bundled tools.
 
-### Verify Installation:
+*(Tip: pass `--skip-ghidra` if you wish to skip the optional Ghidra native analysis bundle).*
+
+---
+
+### 4. Verify Installation
+
+Run the system diagnostics check to ensure all components are `READY`:
+
 ```bash
-rea env
+# General environment check
+rea check
+# (or: python rea.py check / rea env)
+
+# Native analysis readiness check
+rea native setup
 ```
 
 ---
@@ -75,10 +126,11 @@ flowchart TD
 
 ## Prerequisites
 
-To run all capabilities of `REA_Kit`, ensure the following packages are installed:
+To run all capabilities of `REA_Kit`, ensure the following are installed:
 
 * **Python 3.8+** (runs the `reakit` engine).
-* **Java Development Kit (JDK) 11+** (required for `JADX` decompiler and `APKTool`; **JDK 21** for native analysis with Ghidra).
 * **Node.js 22+** (required for `scrcpy-cli` device automation).
+* **Java Development Kit (JDK) 11+** (required for `JADX` decompiler and `APKTool`; **JDK 21** for native analysis with Ghidra).
+* **Go (Golang)** (required to build the `apkd` APK downloader).
 * **A Connected Device or Emulator** (physical device, Genymotion, or Android Studio AVD).
 * **Ghidra 12.x + Maven** (optional, only for `rea native` — see the [Native Library Analysis Guide](./docs/native_analysis.md)).

@@ -26,11 +26,27 @@ def find_scrcpy_dir() -> Path | None:
                 return item
     return None
 
+def find_apkd_bin() -> Path | None:
+    """Finds the apkd binary across bundled paths and PATH."""
+    apkd_name = "apkd.exe" if os.name == "nt" else "apkd"
+    candidates = [
+        CORE_DIR / "apkdgo" / "bin" / apkd_name,
+        CORE_DIR / "apkdgo" / "apkd" / apkd_name,
+        CORE_DIR / "apkdgo" / apkd_name,
+    ]
+    for cand in candidates:
+        if cand.is_file():
+            return cand
+    which_p = shutil.which(apkd_name)
+    if which_p and Path(which_p).is_file():
+        return Path(which_p)
+    return None
+
 def get_bundled_paths() -> dict[str, Path]:
     """Returns a mapping of tool names to their bundled directory paths."""
     scrcpy_dir = find_scrcpy_dir() or (CORE_DIR / "scrcpy_cli" / "vendor" / "scrcpy")
     jadx_bin_dir = CORE_DIR / "jadx" / "bin"
-    apkd_dir = CORE_DIR / "apkdgo"
+    apkd_dir = (CORE_DIR / "apkdgo" / "bin") if (CORE_DIR / "apkdgo" / "bin").exists() else (CORE_DIR / "apkdgo")
     apktool_dir = CORE_DIR / "apktool"
     scrcpy_cli_dist = CORE_DIR / "scrcpy_cli" / "dist"
 
@@ -57,6 +73,7 @@ def get_path_directories() -> list[Path]:
 
 def inject_runtime_path():
     """Injects bundled tool directories into the current Python runtime environment PATH."""
+    fix_unix_permissions()
     current_path = os.environ.get("PATH", "")
     dirs = get_path_directories()
     new_dirs = []
@@ -197,10 +214,10 @@ def check_environment() -> dict:
     }
 
     # 7. apkd (Go downloader)
-    apkd_path = shutil.which("apkd.exe" if os.name == "nt" else "apkd")
+    apkd_path = find_apkd_bin()
     results["apkd"] = {
         "name": "apkd (APK Downloader)",
-        "path": apkd_path or "Not found",
+        "path": str(apkd_path.resolve()) if apkd_path else "Not found",
         "status": "ok" if apkd_path else "missing",
     }
 
@@ -280,15 +297,30 @@ def print_environment_report():
     print("")
 
 def install_scrcpy_cli() -> bool:
-    """Builds and globally links scrcpy-cli via npm link so 'scrcpy-cli' command is globally available."""
+    """Builds, bundles platform binaries, and globally links scrcpy-cli via npm link."""
     scrcpy_cli_dir = CORE_DIR / "scrcpy_cli"
     if not scrcpy_cli_dir.exists():
         return False
 
     npm_path = shutil.which("npm.cmd" if os.name == "nt" else "npm") or shutil.which("npm")
+    node_path = shutil.which("node")
     if not npm_path:
         log_warn("npm was not found in PATH. Skipping global scrcpy-cli linking.")
         return False
+
+    # 1. Ensure scrcpy & adb binaries for the current OS are bundled in vendor/scrcpy
+    vendor_scrcpy = scrcpy_cli_dir / "vendor" / "scrcpy"
+    target_bin = vendor_scrcpy / ("scrcpy.exe" if os.name == "nt" else "scrcpy")
+    target_adb = vendor_scrcpy / ("adb.exe" if os.name == "nt" else "adb")
+    target_server = vendor_scrcpy / "scrcpy-server"
+    download_script = scrcpy_cli_dir / "scripts" / "download-scrcpy.mjs"
+
+    if (not target_bin.exists() or not target_adb.exists() or not target_server.exists()) and download_script.exists() and node_path:
+        log_info("[*] Bundling scrcpy & adb platform binaries for current OS...")
+        try:
+            subprocess.run([node_path, str(download_script)], cwd=str(scrcpy_cli_dir), check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        except Exception as e:
+            log_warn(f"Failed to bundle scrcpy platform binaries: {e}")
 
     node_modules = scrcpy_cli_dir / "node_modules"
     if not node_modules.exists():
@@ -343,12 +375,81 @@ def install_pip_package() -> bool:
         log_warn(f"Failed to install REA_Kit via pip: {e}")
         return False
 
-def install_environment(permanent: bool = True, install_pip: bool = True, link_npm: bool = True) -> list[str]:
-    """Complete REA_Kit installation: registers PATH, configures environment variables, links scrcpy-cli, and installs Python package."""
+def fix_unix_permissions():
+    """Ensures bundled binaries and scripts have executable (+x) permissions on POSIX systems."""
+    if os.name == "nt":
+        return
+    
+    bin_paths = [
+        CORE_DIR / "jadx" / "bin" / "jadx",
+        CORE_DIR / "jadx" / "bin" / "jadx-gui",
+        CORE_DIR / "scrcpy_cli" / "vendor" / "scrcpy" / "adb",
+        CORE_DIR / "scrcpy_cli" / "vendor" / "scrcpy" / "scrcpy",
+        CORE_DIR / "apkdgo" / "bin" / "apkd",
+        CORE_DIR / "apkdgo" / "apkd" / "apkd",
+        CORE_DIR / "apkdgo" / "build.sh",
+    ]
+    for p in bin_paths:
+        if p.exists():
+            try:
+                mode = p.stat().st_mode
+                p.chmod(mode | 0o755)
+            except OSError:
+                pass
+
+def build_apkd_linux() -> bool:
+    """Builds apkd binary for Linux/Unix if Go is available and binary is missing."""
+    if os.name == "nt":
+        return True
+    
+    apkd_bin = find_apkd_bin()
+    if apkd_bin and apkd_bin.is_file():
+        return True
+    
+    go_path = shutil.which("go")
+    if not go_path:
+        return False
+    
+    apkd_dir = CORE_DIR / "apkdgo"
+    bin_dir = apkd_dir / "bin"
+    bin_dir.mkdir(parents=True, exist_ok=True)
+    target_bin = bin_dir / "apkd"
+    
+    log_info("[*] Building apkd for Linux via Go...")
+    try:
+        res = subprocess.run(
+            [go_path, "build", "-o", "bin/apkd", "./apkd"],
+            cwd=str(apkd_dir),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        if res.returncode == 0 and target_bin.exists():
+            target_bin.chmod(target_bin.stat().st_mode | 0o755)
+            log_success("apkd Linux binary built successfully.")
+            return True
+        else:
+            log_warn(f"Failed to build apkd: {res.stderr.strip()}")
+            return False
+    except Exception as e:
+        log_warn(f"Error compiling apkd: {e}")
+        return False
+
+def install_environment(
+    permanent: bool = True,
+    install_pip: bool = True,
+    link_npm: bool = True,
+    setup_ghidra: bool = True,
+) -> list[str]:
+    """Complete REA_Kit installation: registers PATH, configures environment variables, links scrcpy-cli, bundles tools, builds apkd, and sets up Ghidra."""
+    # 0. Ensure POSIX permissions and build apkd if Go compiler exists
+    fix_unix_permissions()
+    build_apkd_linux()
+
     dirs_to_add = get_path_directories()
     added_paths = []
 
-    # 1. Build and link scrcpy-cli globally
+    # 1. Build and link scrcpy-cli globally & bundle scrcpy/adb binaries
     if link_npm:
         install_scrcpy_cli()
 
@@ -356,7 +457,21 @@ def install_environment(permanent: bool = True, install_pip: bool = True, link_n
     if install_pip:
         install_pip_package()
 
-    # 3. Configure Windows User PATH and Environment Variables in Registry
+    # 3. Setup Ghidra & GhidraMCP native bundle if missing
+    if setup_ghidra:
+        try:
+            from reakit.native import find_ghidra_home, fetch_ghidra, find_ghidra_mcp_jar, build_ghidra_mcp
+            ghidra_home = find_ghidra_home()
+            if not ghidra_home:
+                log_info("[*] Bundling Ghidra release for native analysis...")
+                ghidra_home = fetch_ghidra()
+            if ghidra_home and not find_ghidra_mcp_jar(ghidra_home):
+                log_info("[*] Building GhidraMCP plugin jar...")
+                build_ghidra_mcp(ghidra_home)
+        except Exception as e:
+            log_warn(f"Failed to auto-setup Ghidra bundle: {e}")
+
+    # 4. Configure Windows User PATH and Environment Variables in Registry
     if permanent and os.name == "nt":
         try:
             # Query current User PATH from registry

@@ -266,19 +266,18 @@ rea env
 ---
 
 ### 12. `rea install` (`rea setup`, `rea setup-path`)
-Automated installer and environment configurator for REA_Kit. Automatically registers Windows User Environment PATH for all bundled tools (`rea`, `adb`, `scrcpy`, `jadx`, `apkd`, `apktool`, `scrcpy-cli`), configures runtime environment variables (`SCRCPY_SERVER_PATH`, `ADB_PATH`), builds & registers `scrcpy-cli` globally via `npm link`, and registers the `reakit` Python package in editable mode via `pip install -e .`.
+Automated installer and environment configurator for REA_Kit across Linux, macOS, and Windows. Automatically registers PATH for all bundled tools (`rea`, `adb`, `scrcpy`, `jadx`, `apkd`, `apktool`, `scrcpy-cli`), configures runtime environment variables, bundles platform native binaries for `scrcpy` & `adb` (v4.1), compiles `apkd` via Go, downloads and configures **Ghidra 12.x** and **GhidraMCP**, and registers the `reakit` Python package.
 
 ```bash
-# Standard complete installation & PATH registration (Permanent)
-rea install
-
-# Configure PATH for current terminal session only
-rea install --session
-
-# Check installation & environment status
-rea install --check
+# Standard complete installation across all platforms (Permanent)
+./install.sh        # Linux / macOS
+install.bat         # Windows
+rea install         # CLI direct
 
 # Custom installation flags
+rea install --skip-ghidra # Skip automatic Ghidra release download
 rea install --skip-pip    # Skip pip editable install
 rea install --skip-npm    # Skip npm scrcpy-cli linking
+rea install --session     # Configure PATH for current terminal session only
+rea install --check       # Check installation & environment status
 ```

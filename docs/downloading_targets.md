@@ -6,14 +6,14 @@ This guide describes how to configure and execute automated target APK downloads
 
 ## Downloading Engine Overview
 
-Downloading Android applications manually from third-party app stores or web aggregators is slow, prone to version drift, and difficult to automate. `REA_Kit` integrates a compiled Go-based downloading utility (**`apkd`**), located in `core/apkdgo/apkd.exe`, orchestrated directly by the `rea download` command.
+Downloading Android applications manually from third-party app stores or web aggregators is slow, prone to version drift, and difficult to automate. `REA_Kit` integrates a compiled Go-based downloading utility (**`apkd`**), located in `core/apkdgo/bin/apkd` (or `apkd.exe` on Windows), orchestrated directly by the `rea download` command.
 
 ```mermaid
 graph TD
     User[User / Agent / Pipeline] -->|rea dl / rea download| CLI[REA_Kit CLI Engine]
     CLI --> Downloader[APK Downloader Engine]
     Downloader --> Config[ConfigManager: workspace_config.json]
-    Downloader --> Engine[core/apkdgo/apkd.exe]
+    Downloader --> Engine[core/apkdgo/bin/apkd / apkd.exe]
     
     Engine --> Sources{Download Sources}
     Sources -->|Default / Fallback| ApkCombo[APKCombo]
@@ -97,9 +97,9 @@ This ensures newly fetched packages are immediately accessible by decompiler and
 
 ---
 
-## Downloader Engine Reference (`apkd.exe`)
+## Downloader Engine Reference (`apkd`)
 
-The core downloader is powered by the bundled Go binary in `core/apkdgo/apkd.exe`.
+The core downloader is powered by the compiled Go binary in `core/apkdgo/bin/apkd` (or `apkd.exe` on Windows).
 
 ### Standalone CLI Arguments
 
