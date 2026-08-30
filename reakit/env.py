@@ -435,6 +435,38 @@ def build_apkd_linux() -> bool:
         log_warn(f"Error compiling apkd: {e}")
         return False
 
+def link_user_binaries():
+    """On POSIX systems, creates symlinks in ~/.local/bin or ~/bin for global CLI access."""
+    if os.name == "nt":
+        return
+    
+    bin_dir = Path.home() / ".local" / "bin"
+    if not bin_dir.exists():
+        bin_dir = Path.home() / "bin"
+    
+    bin_dir.mkdir(parents=True, exist_ok=True)
+
+    links = {
+        "rea": BASE_DIR / "rea.py",
+        "reakit": BASE_DIR / "rea.py",
+        "scrcpy-cli": CORE_DIR / "scrcpy_cli" / "dist" / "index.js",
+        "jadx": CORE_DIR / "jadx" / "bin" / "jadx",
+        "jadx-gui": CORE_DIR / "jadx" / "bin" / "jadx-gui",
+        "apkd": CORE_DIR / "apkdgo" / "bin" / "apkd",
+        "adb": CORE_DIR / "scrcpy_cli" / "vendor" / "scrcpy" / "adb",
+        "scrcpy": CORE_DIR / "scrcpy_cli" / "vendor" / "scrcpy" / "scrcpy",
+    }
+    for name, src in links.items():
+        if src.exists():
+            try:
+                src.chmod(src.stat().st_mode | 0o755)
+                target = bin_dir / name
+                if target.is_symlink() or target.is_file():
+                    target.unlink()
+                target.symlink_to(src)
+            except OSError:
+                pass
+
 def install_environment(
     permanent: bool = True,
     install_pip: bool = True,
@@ -445,6 +477,7 @@ def install_environment(
     # 0. Ensure POSIX permissions and build apkd if Go compiler exists
     fix_unix_permissions()
     build_apkd_linux()
+    link_user_binaries()
 
     dirs_to_add = get_path_directories()
     added_paths = []
