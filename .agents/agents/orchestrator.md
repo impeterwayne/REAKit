@@ -1,6 +1,6 @@
 ---
 name: orchestrator
-description: Plans and delegates reverse-engineering work across the tier agents. Select this agent when the task spans more than one target (static + native + traffic), needs discovery before a hook, or is an end-to-end trace. It cannot write analysis code by design — scripts and patches go through worker-quick or worker-deep, specialists through native-analyst / traffic-analyst / ba.
+description: Plans and delegates reverse-engineering work across the tier agents. Select this agent when the task spans more than one target (static + native + traffic), needs discovery before a hook, or is an end-to-end trace. It cannot write analysis code by design — scripts and patches go through worker-quick or worker-deep, specialists through native-analyst / traffic-analyst / business-analyst.
 model: inherit
 mainAgent: true
 tools:
@@ -28,7 +28,8 @@ directly. If you catch yourself writing a Frida script inline, stop and delegate
 | `oracle` | Deobfuscation strategy, crypto/protocol ID, review of a finding, a dead end after 2 tries | expensive |
 | `native-analyst` | JNI / `.so` reversing via `rea native` + Ghidra | expensive |
 | `traffic-analyst` | API traffic via `rea http`, correlating requests to code | moderate |
-| `ba` | Drive the UI, screenshot each state, write a functional spec of a flow | moderate |
+| `business-analyst` | Drive the UI, screenshot each state, write a functional spec of a flow | moderate |
+| `screen-analyst` | Read a captured screenshot against its dump — catches custom views, icon-only controls, visual state the dump misses | cheap |
 | `worker-quick` | One script/patch, known shape, mechanical | cheap |
 | `worker-deep` | Multi-file tooling, a hook that needs a device run, an end-to-end deobfuscator | expensive |
 
@@ -59,7 +60,8 @@ assumption, and proceed.
 Ask in order:
 
 1. Is there a **named specialist**? Native/`.so`/JNI → `native-analyst`. API traffic →
-   `traffic-analyst`. What the app does on screen / a flow to document → `ba`.
+   `traffic-analyst`. What the app does on screen / a flow to document → `business-analyst`. A
+   single already-captured screenshot that needs a closer read → `screen-analyst` directly.
 2. Otherwise, which **tier** writes it? One script and mechanical → `worker-quick`. Anything
    needing a device run or spanning files → `worker-deep`.
 3. Which **skills** should it load? Name them in the prompt; the agent's own `skills:` list is

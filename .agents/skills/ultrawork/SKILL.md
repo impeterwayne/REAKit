@@ -68,7 +68,8 @@ you could have had summarised.
 | Where is X in the decompilation, which classes touch Y | `explore` — fan out 2–3 in **one** `invoke_subagent` call |
 | JNI / `.so` decompilation and tracing | `native-analyst` |
 | API traffic, correlate a request to its builder | `traffic-analyst` |
-| Establish which screens/actions exist, spec an on-screen flow | `ba` |
+| Establish which screens/actions exist, spec an on-screen flow | `business-analyst` |
+| Read a captured screenshot against its dump for what the dump misses | `screen-analyst` |
 | Deobfuscation strategy, crypto/protocol ID, review of a finding, a dead end after 2 tries | `oracle` (read-only) |
 | One mechanical script/patch | `worker-quick` (no shell) |
 | A hook that needs a device run, an end-to-end deobfuscator | `worker-deep` |

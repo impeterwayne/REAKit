@@ -92,8 +92,8 @@ PROFILES: dict[str, dict[str, list[str]]] = {
             "loop", "ultrawork",
         ],
         "agents": [
-            "explore", "oracle", "orchestrator", "traffic-analyst", "ba",
-            "worker-deep", "worker-quick",
+            "explore", "oracle", "orchestrator", "traffic-analyst", "business-analyst",
+            "screen-analyst", "worker-deep", "worker-quick",
         ],
         "rules": ["dynamic", "reverse", "orchestrate"],
     },
