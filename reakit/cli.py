@@ -42,6 +42,25 @@ from reakit.native import (
     run_mcp_bridge,
     show_info,
 )
+from reakit.httptoolkit import (
+    OPERATION_ALIASES,
+    HtkError,
+    HtkNotRunning,
+    HttpToolkit,
+    android_proxy_off,
+    android_proxy_on,
+    export_cert,
+    print_events,
+    print_interceptors,
+    print_operations,
+    print_outline,
+    print_proxy,
+    resolve_event_id,
+    resolve_operation,
+    save_events,
+    watch_events,
+)
+from reakit import httptoolkit as htk_mod
 import os
 
 def _add_target_args(parser: argparse.ArgumentParser, positional_help: str = "Target package name or alias"):
@@ -228,6 +247,99 @@ def _add_native_parser(subparsers):
     return native_p
 
 
+def _add_http_parser(subparsers):
+    """Registers 'rea http' - HTTP Toolkit lifecycle plus the captured-traffic API."""
+    http_p = subparsers.add_parser(
+        "http",
+        aliases=["htk", "traffic"],
+        help="Start HTTP Toolkit and read captured API traffic (proxy, event log, MCP bridge)",
+    )
+    http_sub = http_p.add_subparsers(dest="http_action", help="HTTP Toolkit actions")
+
+    # --- lifecycle ---
+    http_sub.add_parser("status", help="Show whether HTTP Toolkit is running and ready")
+
+    start_p = http_sub.add_parser("start", aliases=["launch"], help="Launch HTTP Toolkit and wait for its API")
+    start_p.add_argument("--no-wait", action="store_true", help="Launch without waiting for readiness")
+    start_p.add_argument("--timeout", type=int, default=60, help="Seconds to wait for readiness (default 60)")
+
+    # --- the captured traffic log ---
+    ev_p = http_sub.add_parser("events", aliases=["log", "ls"], help="List captured HTTP exchanges")
+    ev_p.add_argument("--filter", "-f", help="HTTP Toolkit filter expression, e.g. 'status>=400 method=POST'")
+    ev_p.add_argument("--limit", "-n", type=int, default=20, help="Max exchanges to return (default 20)")
+    ev_p.add_argument("--offset", type=int, default=0, help="Exchanges to skip (default 0)")
+    ev_p.add_argument("--grep", "-g", help="Client-side regex filter on URL / method / source")
+    ev_p.add_argument("--json", action="store_true", help="Print the raw JSON response")
+    ev_p.add_argument("--save", action="store_true", help="Save the snapshot into the target workspace")
+    ev_p.add_argument("--target", "-t", help="Target package or alias to save under")
+    ev_p.add_argument("--label", help="Label for the saved snapshot filename")
+
+    watch_p = http_sub.add_parser("watch", aliases=["tail"], help="Stream new exchanges as they are captured")
+    watch_p.add_argument("--filter", "-f", help="HTTP Toolkit filter expression")
+    watch_p.add_argument("--grep", "-g", help="Client-side regex filter on URL / source")
+    watch_p.add_argument("--interval", type=float, default=2.0, help="Poll interval in seconds (default 2)")
+    watch_p.add_argument("--limit", type=int, default=50, help="Exchanges to fetch per poll (default 50)")
+
+    show_p = http_sub.add_parser("show", aliases=["outline"], help="Show headers, status and timing for one exchange")
+    show_p.add_argument("event_id", help="Event id (an 8-char prefix from 'rea http events' is enough)")
+    show_p.add_argument("--json", action="store_true", help="Print the raw JSON response")
+
+    body_p = http_sub.add_parser("body", help="Print or save the request/response body of an exchange")
+    body_p.add_argument("event_id", help="Event id or 8-char prefix")
+    body_p.add_argument("--request", action="store_true", help="Fetch the request body (default: response)")
+    body_p.add_argument("--response", action="store_true", help="Fetch the response body (default)")
+    body_p.add_argument("--offset", type=int, default=0, help="Character offset to start from")
+    body_p.add_argument("--max-length", type=int, help="Maximum characters to return")
+    body_p.add_argument("--out", "-o", help="Write the body to this file instead of stdout")
+    body_p.add_argument("--json", action="store_true", help="Print the raw JSON response")
+
+    clear_p = http_sub.add_parser("clear", help="Clear captured events")
+    clear_p.add_argument("--pinned", action="store_true", help="Also clear pinned events")
+
+    # --- proxy, certificate and device wiring ---
+    proxy_p = http_sub.add_parser("proxy", help="Show the proxy port, CA certificate and reachable addresses")
+    proxy_p.add_argument("--json", action="store_true", help="Print the raw JSON response")
+
+    int_p = http_sub.add_parser("interceptors", aliases=["int"], help="List interceptors and their state")
+    int_p.add_argument("--available", "-a", action="store_true", help="Only show activable interceptors")
+    int_p.add_argument("--grep", "-g", help="Filter by id or name")
+    int_p.add_argument("--json", action="store_true", help="Print the raw JSON response")
+
+    cert_p = http_sub.add_parser("cert", help="Print or export the HTTP Toolkit CA certificate")
+    cert_p.add_argument("--out", "-o", help="Write the certificate to this path")
+
+    and_p = http_sub.add_parser("android", aliases=["device"], help="Point an ADB device at the HTTP Toolkit proxy")
+    and_p.add_argument("--on", action="store_true", help="Set the device proxy (default)")
+    and_p.add_argument("--off", action="store_true", help="Clear the device proxy and adb reverse tunnels")
+    and_p.add_argument("--serial", "-s", help="Target device serial")
+    and_p.add_argument("--host", help="Use this host address instead of an adb reverse tunnel")
+    and_p.add_argument("--no-cert", action="store_true", help="Skip pushing the CA certificate")
+    and_p.add_argument("--port", type=int, help="Proxy port to unhook when using --off")
+
+    # --- generic API access ---
+    ops_p = http_sub.add_parser("ops", aliases=["operations"], help="List the operations the app publishes")
+    ops_p.add_argument("--verbose", "-v", action="store_true", help="Also show each operation's parameters")
+    ops_p.add_argument("--json", action="store_true", help="Print the raw JSON response")
+
+    call_p = http_sub.add_parser("call", help="Call any HTTP Toolkit operation directly")
+    call_p.add_argument("operation", help="Operation name (events.list) or alias (events, proxy, interceptors)")
+    call_p.add_argument("--param", "-p", action="append", default=[], help="Parameter key=value (repeatable)")
+    call_p.add_argument("--source", default=None, help="Override the API source field (mcp or ctl)")
+    call_p.add_argument("--grep", "-g", help="Keep only response lines matching this regex")
+
+    # --- MCP bridge and upstream CLI ---
+    mcp_p = http_sub.add_parser("mcp", help="Run HTTP Toolkit's stdio MCP server (for AI clients)")
+    mcp_p.add_argument("--print-config", action="store_true", help="Print MCP client configuration and exit")
+    mcp_p.add_argument("mcp_args", nargs=argparse.REMAINDER, help="Arguments passed to httptoolkit-mcp")
+
+    ctl_p = http_sub.add_parser("ctl", help="Run the bundled httptoolkit-ctl (its operations require Pro)")
+    ctl_p.add_argument("ctl_args", nargs=argparse.REMAINDER, help="Arguments passed to httptoolkit-ctl")
+
+    http_sub.add_parser("setup", aliases=["doctor"], help="Check the HTTP Toolkit installation and live API")
+
+    return http_p
+
+
 def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="rea",
@@ -289,6 +401,9 @@ def create_parser() -> argparse.ArgumentParser:
 
     # 5b. native / so - ELF extraction and Ghidra analysis
     _add_native_parser(subparsers)
+
+    # 5c. http / htk - HTTP Toolkit proxy, traffic log and MCP bridge
+    _add_http_parser(subparsers)
 
     # 6. scrcpy / control
     scrcpy_p = subparsers.add_parser("scrcpy", aliases=["control"], help="Android device automation via scrcpy-cli")
@@ -671,6 +786,230 @@ def _run_native(args, config_mgr) -> int:
     return 2
 
 
+def _coerce_param(value: str):
+    """HTTP Toolkit operation schemas are typed, so key=value pairs get coerced."""
+    lowered = value.lower()
+    if lowered in ("true", "false"):
+        return lowered == "true"
+    try:
+        return int(value)
+    except ValueError:
+        pass
+    try:
+        return float(value)
+    except ValueError:
+        return value
+
+
+def _dump_json(data) -> int:
+    print(json.dumps(data, indent=2))
+    return 0
+
+
+def _run_http(args, config_mgr) -> int:
+    """Dispatches 'rea http <action>'."""
+    action = getattr(args, "http_action", None)
+    if not action:
+        log_error("An http subcommand is required.")
+        log_info(
+            "Typical flow: rea http start -> rea http android --on -> rea http watch "
+            "-> rea http show <id>"
+        )
+        log_info("Check prerequisites with: rea http setup")
+        return 2
+
+    if action in ("setup", "doctor"):
+        return htk_mod.doctor(config_mgr)
+
+    if action == "mcp":
+        if args.print_config:
+            return htk_mod.print_mcp_config(config_mgr)
+        extra = [a for a in getattr(args, "mcp_args", []) if a != "--"]
+        return htk_mod.run_mcp_bridge(config_mgr, extra)
+
+    if action == "ctl":
+        extra = [a for a in getattr(args, "ctl_args", []) if a != "--"]
+        return htk_mod.run_ctl(config_mgr, extra)
+
+    htk = HttpToolkit(config_mgr)
+
+    if action in ("start", "launch"):
+        return htk.start(wait=not args.no_wait, timeout=args.timeout)
+
+    if action == "status":
+        try:
+            status = htk.client.status()
+        except HtkNotRunning:
+            log_warn("HTTP Toolkit is not running.")
+            log_info("Start it with: rea http start")
+            return 1
+        except HtkError as exc:
+            log_error(str(exc))
+            return 1
+        if status.get("ready"):
+            log_success("HTTP Toolkit is running and its API is ready.")
+        else:
+            log_warn("HTTP Toolkit is running but the UI has not connected yet.")
+            return 1
+        try:
+            cfg = htk.proxy_config()
+            result = htk.events(limit=1)
+            log_info(f"Proxy port {cfg.get('httpProxyPort')} - {result.get('total', 0)} exchange(s) captured")
+            log_dim(f"CA certificate: {cfg.get('certPath')}")
+        except HtkError as exc:
+            log_warn(f"Live details unavailable: {exc}")
+        return 0
+
+    if action in ("android", "device"):
+        if args.off:
+            return android_proxy_off(serial=args.serial, port=args.port, htk=htk)
+        return android_proxy_on(
+            htk, serial=args.serial, host=args.host, push_cert=not args.no_cert
+        )
+
+    if action in ("watch", "tail"):
+        return watch_events(
+            htk,
+            filter=args.filter,
+            interval=args.interval,
+            batch=args.limit,
+            grep=args.grep,
+        )
+
+    # Everything below needs one live API call; report a missing app once, here.
+    try:
+        if action in ("events", "log", "ls"):
+            # Default to the newest exchanges; an explicit --offset pages literally.
+            if args.offset:
+                result = htk.events(filter=args.filter, limit=args.limit, offset=args.offset)
+            else:
+                result = htk.recent(filter=args.filter, limit=args.limit)
+            if args.json:
+                _dump_json(result)
+            else:
+                print_events(result, grep=args.grep)
+            if args.save:
+                target = args.target or (
+                    config_mgr.targets[0].get("packageName") if config_mgr.targets else None
+                )
+                if not target:
+                    log_error("--save needs a target: pass --target <package> or configure one.")
+                    return 1
+                save_events(config_mgr, target, result, label=args.label)
+            return 0
+
+        if action in ("show", "outline"):
+            event_id = resolve_event_id(htk, args.event_id)
+            if not event_id:
+                return 1
+            outline = htk.outline(event_id)
+            return _dump_json(outline) if args.json else (print_outline(outline) or 0)
+
+        if action == "body":
+            event_id = resolve_event_id(htk, args.event_id)
+            if not event_id:
+                return 1
+            data = htk.body(
+                event_id,
+                response=not args.request,
+                offset=args.offset,
+                max_length=args.max_length,
+            )
+            if args.json:
+                return _dump_json(data)
+            # The operation wraps the body as {body, totalSize, isTruncated}; older
+            # shapes return the string directly. An empty body is still a body.
+            content, truncated, total = data, False, None
+            if isinstance(data, dict):
+                if "body" in data:
+                    content = data["body"]
+                    truncated = bool(data.get("isTruncated"))
+                    total = data.get("totalSize")
+                elif "content" in data:
+                    content = data["content"]
+                else:
+                    content = json.dumps(data, indent=2)
+            content = content if isinstance(content, str) else json.dumps(content, indent=2)
+
+            if args.out:
+                out_path = Path(args.out)
+                out_path.parent.mkdir(parents=True, exist_ok=True)
+                out_path.write_text(content, encoding="utf-8")
+                log_success(f"Body written -> {out_path} ({len(content)} chars)")
+            elif not content:
+                which = "request" if args.request else "response"
+                log_info(f"Empty {which} body (0 bytes).")
+            else:
+                print(content)
+            if truncated:
+                log_warn(
+                    f"Body truncated at {len(content)} of {total} chars - "
+                    f"continue with --offset {args.offset + len(content)}"
+                )
+            return 0
+
+        if action == "clear":
+            htk.clear(clear_pinned=args.pinned)
+            log_success("Captured events cleared" + (" (including pinned)." if args.pinned else "."))
+            return 0
+
+        if action == "proxy":
+            cfg = htk.proxy_config()
+            return _dump_json(cfg) if args.json else (print_proxy(cfg) or 0)
+
+        if action in ("interceptors", "int"):
+            interceptors = htk.interceptors()
+            if args.json:
+                return _dump_json(interceptors)
+            print_interceptors(interceptors, only_available=args.available, grep=args.grep)
+            return 0
+
+        if action == "cert":
+            return export_cert(htk, args.out)
+
+        if action in ("ops", "operations"):
+            operations = htk.client.operations()
+            if args.json:
+                return _dump_json(operations)
+            print_operations(operations, verbose=args.verbose)
+            return 0
+
+        if action == "call":
+            name, available = resolve_operation(htk.client, args.operation)
+            if available is not None:
+                log_error(f"Unknown operation: {args.operation}")
+                log_info("Operations this HTTP Toolkit build publishes:")
+                for op_name in available:
+                    print(f"    {op_name}")
+                log_dim(f"Short aliases: {', '.join(sorted(OPERATION_ALIASES))}")
+                return 1
+            params = {
+                k: _coerce_param(v) for k, v in _parse_kv_params(args.param).items()
+            }
+            kwargs = {"source": args.source} if args.source else {}
+            data = htk.client.execute(name, params, **kwargs)
+            output = json.dumps(data, indent=2)
+            if args.grep:
+                pattern = re.compile(args.grep, re.IGNORECASE)
+                output = "\n".join(l for l in output.splitlines() if pattern.search(l))
+                if not output.strip():
+                    log_warn(f"No lines matched /{args.grep}/")
+                    return 0
+            print(output)
+            return 0
+
+    except HtkNotRunning:
+        log_error("HTTP Toolkit is not running.")
+        log_info("Start it with: rea http start")
+        return 1
+    except HtkError as exc:
+        log_error(str(exc))
+        return 1
+
+    log_error(f"Unknown http subcommand: {action}")
+    return 2
+
+
 def main():
     inject_runtime_path()
     parser = create_parser()
@@ -792,6 +1131,9 @@ def main():
 
     elif cmd in ("native", "so", "nat"):
         sys.exit(_run_native(args, config_mgr))
+
+    elif cmd in ("http", "htk", "traffic"):
+        sys.exit(_run_http(args, config_mgr))
 
     elif cmd in ("scrcpy", "control"):
         bridge = ScrcpyBridge()

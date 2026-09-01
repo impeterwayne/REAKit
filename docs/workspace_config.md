@@ -17,6 +17,8 @@ A standard configuration file contains three primary keys:
     "apks": "apks",
     "jadx": "jadx_src",
     "docs": "docs",
+    "native": "native",
+    "traffic": "traffic",
     "runtime": {
       "base": "runtime",
       "internal": "runtime/internal",
@@ -53,6 +55,8 @@ Defines the standard internal directory schema created for every target package.
 | `apks` | `"apks"` | Directory where downloaded `.apk`, `.xapk`, and `.apks` files are stored. |
 | `jadx` | `"jadx_src"` | Directory where JADX generates the decompiled Java Gradle project. |
 | `docs` | `"docs"` | Directory for local reverse engineering notes, flow diagrams, and vulnerability reports. |
+| `native` | `"native"` | Extracted `lib/<abi>/*.so` libraries, `native_manifest.json`, and the shared Ghidra project (`rea native`). |
+| `traffic` | `"traffic"` | Captured API traffic snapshots written by `rea http events --save`. |
 | `runtime.base` | `"runtime"` | Base folder for extracted dynamic app storage data. |
 | `runtime.internal` | `"runtime/internal"` | Local mirror for `/data/data/<package_name>/` (SQLite databases, Shared Preferences XML). |
 | `runtime.external` | `"runtime/external"` | Local mirror for `/sdcard/Android/data/<package_name>/` external app storage. |
@@ -69,6 +73,18 @@ Maintains the centralized list of targets, URLs, aliases, and download configura
   * **`alias` (String, Optional):** Friendly, short directory alias (e.g. `Lichess`).
   * **`source` (String, Optional):** Preferred APK download provider (`apkcombo`, `fdroid`, `rustore`, `nashstore`).
   * **`sourceLink` (String, Optional):** Original Play Store link or reference URL.
+
+### 4. External Tool Locations (Optional)
+
+Only needed when a tool is installed somewhere REA_Kit does not look by default. Each also has an
+environment-variable equivalent, which takes precedence.
+
+| Key | Environment variable | Purpose |
+|---|---|---|
+| `ghidraHome` | `GHIDRA_HOME` | Ghidra installation directory for `rea native`. Relative paths resolve against the project root. |
+| `ghidraGuiPort` | `GHIDRA_GUI_PORT` | Port the Ghidra GUI plugin serves on (default `8089`). |
+| `ghidraHeadlessPort` | `GHIDRA_HEADLESS_PORT` | Port `rea native serve` listens on (default `8192`). |
+| `httpToolkitHome` | `HTK_DESKTOP_RESOURCES` / `HTK_DESKTOP_EXE` | HTTP Toolkit installation directory for `rea http`. |
 
 ---
 

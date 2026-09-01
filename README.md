@@ -94,9 +94,11 @@ flowchart TD
         direction TB
         S4["<b>4. rea scrcpy</b><br/><i>Device Control & UI Automation</i>"]
         S5["<b>5. rea pull</b><br/><i>ADB Sandbox Runtime Extraction</i>"]
-        
+        S6["<b>6. rea http</b><br/><i>HTTP Toolkit proxy + API traffic log</i>"]
+
         S4 -->|Interact & Trigger State| S5
         S5 -->|Iterate / Next Action| S4
+        S4 -->|Traffic while driving the app| S6
     end
 
     Static --> Native
@@ -105,22 +107,26 @@ flowchart TD
     Static --> WS[(Target Workspace)]
     Native --> WS
     S5 --> WS
+    S6 --> WS
     S4 <--> DEV[(Android Device / Emulator)]
+    S6 <--> DEV
     N2 <--> GH[(Ghidra GUI / MCP bridge / CLI)]
+    S6 <--> HTK[(HTTP Toolkit app / MCP bridge / CLI)]
 ```
 
 ---
 
 ## Documentation Index
 
-1. **[CLI Reference Manual](./docs/cli_reference.md)** - Comprehensive manual for the `rea` CLI and all 12 subcommands.
+1. **[CLI Reference Manual](./docs/cli_reference.md)** - Comprehensive manual for the `rea` CLI and all its subcommands.
 2. **[Device Control & Automation Guide](./docs/scrcpy_control.md)** - Low-latency scrcpy daemon control and automation actions.
 3. **[Workspace Setup & Management Guide](./docs/workspace_management.md)** - Directory schemas and target workspace management.
 4. **[Target Downloading Guide](./docs/downloading_targets.md)** - Automated APK downloading via `apkd`.
 5. **[Bytecode Decompilation & JADX Guide](./docs/decompilation.md)** - JADX memory safeguards, split APK merging, and decompilation.
 6. **[Runtime Extraction Guide](./docs/runtime_extraction.md)** - ADB privilege escalation (native root, Magisk su, run-as) and sandbox pulling.
 7. **[Native Library Analysis Guide](./docs/native_analysis.md)** - `.so` extraction, ELF/packer fingerprinting, and headless-or-GUI Ghidra analysis via GhidraMCP.
-8. **[Configuration Schema Guide](./docs/workspace_config.md)** - Central `workspace_config.json` schema details.
+8. **[API Traffic Capture Guide](./docs/http_toolkit.md)** - HTTP Toolkit lifecycle, device proxy wiring, and the captured-exchange log via `rea http`.
+9. **[Configuration Schema Guide](./docs/workspace_config.md)** - Central `workspace_config.json` schema details.
 
 ---
 
@@ -134,3 +140,4 @@ To run all capabilities of `REA_Kit`, ensure the following are installed:
 * **Go (Golang)** (required to build the `apkd` APK downloader).
 * **A Connected Device or Emulator** (physical device, Genymotion, or Android Studio AVD).
 * **Ghidra 12.x + Maven** (optional, only for `rea native` — see the [Native Library Analysis Guide](./docs/native_analysis.md)).
+* **HTTP Toolkit** (optional, only for `rea http` — install the desktop app from [httptoolkit.com/download](https://httptoolkit.com/download/); see the [API Traffic Capture Guide](./docs/http_toolkit.md)).

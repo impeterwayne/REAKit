@@ -5,6 +5,7 @@
     "jadx": "jadx_src",
     "docs": "docs",
     "native": "native",
+    "traffic": "traffic",
     "runtime": {
       "base": "runtime",
       "internal": "runtime/internal",

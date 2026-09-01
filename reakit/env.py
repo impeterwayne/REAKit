@@ -262,6 +262,45 @@ def check_environment() -> dict:
         "status": "ok" if bridge else "warning",
     }
 
+    # 12. HTTP Toolkit - backend for 'rea http' (API traffic capture)
+    from reakit.httptoolkit import (
+        HtkControlClient,
+        find_htk_resources,
+        find_htk_tool,
+        htk_server_version,
+    )
+
+    htk_resources = find_htk_resources()
+    results["http_toolkit"] = {
+        "name": "HTTP Toolkit (API Traffic)",
+        "version": htk_server_version() or "Unknown",
+        "path": str(htk_resources) if htk_resources else "Not found (httptoolkit.com/download)",
+        "status": "ok" if htk_resources else "missing",
+    }
+
+    # 13. HTTP Toolkit control API - only live while the desktop app is running
+    if htk_resources:
+        client = HtkControlClient(timeout=3)
+        if client.is_ready():
+            api_status, api_detail = "ok", "Live (rea http events)"
+        elif client.is_running():
+            api_status, api_detail = "warning", "Running, UI not connected yet"
+        else:
+            api_status, api_detail = "warning", "Not running (rea http start)"
+        results["http_toolkit_api"] = {
+            "name": "HTTP Toolkit Control API",
+            "version": api_detail,
+            "path": "Not found",
+            "status": api_status,
+        }
+
+        htk_mcp = find_htk_tool("mcp")
+        results["http_toolkit_mcp"] = {
+            "name": "HTTP Toolkit MCP Bridge",
+            "path": " ".join(htk_mcp) if htk_mcp else "Not found (optional)",
+            "status": "ok" if htk_mcp else "warning",
+        }
+
     return results
 
 def print_environment_report():
