@@ -775,6 +775,19 @@ def watch_events(
     pattern = re.compile(grep, re.IGNORECASE) if grep else None
     first_pass = True
 
+    # Fail fast if nothing is listening yet: the in-loop HtkNotRunning handler exists to
+    # ride out a restart mid-session, and would otherwise silently spin here forever.
+    if not htk.is_ready():
+        log_error("HTTP Toolkit is not running (or its UI has not connected yet).")
+        log_info("Start it with: rea http start - then 'rea http' to listen.")
+        return 1
+
+    try:
+        cfg = htk.proxy_config()
+        log_dim(f"proxy port {cfg.get('httpProxyPort')}")
+    except HtkError:
+        pass
+
     log_info(f"Watching for new exchanges every {interval:g}s - press Ctrl+C to stop.")
     if filter:
         log_dim(f"filter: {filter}")

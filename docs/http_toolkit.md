@@ -99,16 +99,28 @@ rea http ops              # each operation, its tiers, and whether it is free
 
 ## 3. A dynamic session, end to end
 
+Once HTTP Toolkit is running and the device is wired (see below), **bare `rea http` just
+listens** — that is the command you want mid-session:
+
 ```bash
-rea http start                    # launch the app, wait for the API, report the proxy port
-rea http android --on             # adb reverse + device proxy + push the CA certificate
-rea http watch                    # stream new exchanges while you drive the app
+rea http                          # stream new exchanges while you drive the app
 # ...in another terminal:
-rea scrcpy tap 500 1200           # drive the UI; traffic appears in the watch feed
+rea scrcpy tap 500 1200           # drive the UI; traffic appears in the feed
 rea http events -f "hostname*=api"
 rea http show 4a72e9f1            # headers, status, timing, body sizes
 rea http body 4a72e9f1 --response # dump the response body
-rea http android --off            # hand the device back
+```
+
+`rea http` takes the same flags as `rea http watch` (`-f`, `-g`, `--interval`, `--limit`)
+and assumes the app, the device proxy and the CA are already set up. If nothing is
+listening it says so immediately rather than spinning.
+
+First-time (or after a reboot) wiring, which the listen path assumes has happened:
+
+```bash
+rea http start                    # launch the app, wait for the API, report the proxy port
+rea http android --on             # adb reverse + device proxy + push the CA certificate
+rea http android --off            # afterwards: hand the device back
 ```
 
 ### Pointing the device at the proxy
@@ -185,16 +197,20 @@ target.
 > Passing `--offset` explicitly switches to literal paging from the oldest exchange, which is what
 > you want when walking a long capture forward.
 
-### `rea http watch` (`tail`)
+### `rea http` / `rea http watch` (`tail`)
 
 Polls the API and prints only exchanges it has not seen yet — the backlog is noted and skipped, so
-the feed is live traffic only. Pair it with `rea scrcpy` in another terminal.
+the feed is live traffic only. Pair it with `rea scrcpy` in another terminal. This is what a bare
+`rea http` does, so the subcommand is optional.
 
 ```bash
-rea http watch                     # every new exchange
-rea http watch -f "hostname*=api"  # server-side filter
-rea http watch -g "token" --interval 1
+rea http                           # every new exchange (same as `rea http watch`)
+rea http -f "hostname*=api"        # server-side filter
+rea http -g "token" --interval 1
 ```
+
+It refuses to start if HTTP Toolkit is not running and ready; once attached, it rides out a
+restart of the app rather than exiting.
 
 ### `rea http show` / `rea http body`
 
@@ -214,6 +230,7 @@ rea http body 4a72e9f1 --response --offset 100000   # continue past a free-tier 
 
 | Command | Aliases | Description |
 |---|---|---|
+| `rea http` | | **Default: listen.** Stream new exchanges (`-f`, `-g`, `--interval`, `--limit`) |
 | `rea http status` | | Is the app running, ready, and what has it captured |
 | `rea http start` | `launch` | Launch the desktop app and wait for its API (`--no-wait`, `--timeout`) |
 | `rea http events` | `log`, `ls` | List captured exchanges (`-f`, `-n`, `--offset`, `-g`, `--json`, `--save`, `-t`, `--label`) |

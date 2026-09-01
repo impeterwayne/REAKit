@@ -1,0 +1,74 @@
+{
+  "artifact-guard": {
+    "_comment": "Protects generated RE artifacts from hand edits. Denies write_to_file / replace_file_content into the regions a `rea` command owns and regenerates -- jadx_src/ (rea decode), native/ (rea native extract|import), apks/ (rea download), runtime/ (rea pull) -- plus any acquired binary suffix (.apk .xapk .dex .so .odex .vdex) wherever it sits. Reads and greps over the decompilation are never touched; only in-place edits are blocked, because the next pipeline run silently overwrites them and takes any finding that lived only in the edit with it. Points the analyst at the durable place instead: a note under findings/ or docs/, or a patch/hook script the pipeline can re-apply. Exempts the findings/ docs/ notes/ patches/ segments so an analysis file beside the decompilation is never caught. PreToolUse (not PostToolUse) because only the PreToolUse payload carries toolCall.args, so only it knows the target path before the write lands. Pass verdict is 'ask' (normal approval flow preserved). Fails open on any error or unrecognised arg shape. Verified: 14/14 self-test fixtures. Escape hatch without editing config: `python .agents/hooks/artifact_guard.py --off` (also --on, --status).",
+    "enabled": true,
+    "PreToolUse": [
+      {
+        "matcher": "write_to_file|replace_file_content|multi_replace_file_content",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python hooks/artifact_guard.py",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  },
+  "root-write-guard": {
+    "_comment": "Enforcement half of rules/orchestrate.md: the session the human talks to plans and delegates; it does not write analysis code. Denies writes to SCRIPT/CODE artifacts (.py .js .ts .rb .java .kt .smali .c .cc .cpp .h .hpp .sh .ps1 .json) when the calling conversation is the ROOT session, and passes them for delegates -- so the human's session must dispatch worker-quick / worker-deep to author a Frida hook, a deobfuscation script, or a patch. Findings, notes and plans (.md, .txt) are never gated; the invariant is about executable artifacts, not prose. Root/delegate is decided by scanning sibling brain dirs for a parent's 'Created the following subagents' record naming this conversationId -- directional on purpose, because a child names its parent when reporting back and a plain substring test misreads every parent as a delegate. Delegate verdicts cache to .agents/state/write_guard/; root is deliberately NOT cached so a late parent flush can still flip it. Fails open on any error, unknown arg shape, or missing conversationId. Scoped to the project root, so an agent's own scratch space is never gated; goals.json / package.json / tsconfig.json are exempt. Stricter than the prose invariant -- it will block your own one-line script edits. Escape hatch without editing config: `python .agents/hooks/write_guard.py --off` (also --on, --status). Verified: self-tests pass. UNVERIFIED: how Antigravity combines two PreToolUse verdicts when this and artifact-guard both match a write.",
+    "enabled": true,
+    "PreToolUse": [
+      {
+        "matcher": "write_to_file|replace_file_content|multi_replace_file_content",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python hooks/write_guard.py",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  },
+  "ultrawork-intent-gate": {
+    "_comment": "Turns the literal word 'ultrawork' (or 'ultra work' / 'ulw') in a user prompt into an injected directive that activates .agents/skills/ultrawork/SKILL.md -- high-rigour, evidence-bound analysis with a registered goal loop. PreInvocation carries NO prompt text, so the transcript is the only source. Cheap by construction: the transcript is append-only, so the hook stores a byte offset per conversationId and scans only what was appended. Fires at most once per triggering prompt and at most 8 times per conversation. The trigger is matched ONLY inside <USER_REQUEST> (the metadata block inlines whole skill bodies, so matching there would fire on any skill that mentions the word); nothing is injected when the record shows the platform already activated the skill; records carrying the hook's own marker are skipped so an injection cannot re-trigger the gate. Keying on a literal word scopes it to the main session for free -- a subagent's task prompt cannot contain the trigger unless the orchestrator put it there. Fails open. Escape hatch: `python .agents/hooks/intent_gate.py --off` (also --on, --status, --print-directive, --scan <transcript>). Verified: 36 fixtures.",
+    "enabled": true,
+    "PreInvocation": [
+      {
+        "type": "command",
+        "command": "python hooks/intent_gate.py",
+        "timeout": 10
+      }
+    ]
+  },
+  "stop-verifier": {
+    "_comment": "Holds a registered goal loop open until its goals hold. Inert unless the stopping conversation OWNS a loop under .agents/state/loop/ -- so it is opt-in by construction (someone ran `loop.py create-goals`) and cannot fight subagents, which do not own their parent's loop. Verification validates the RECORD, never re-runs the work: a recorded non-zero exit code under a 'complete' goal, a missing evidence artifact, or goals.json drifting from the ledger each block the stop -- because a Stop hook re-running `rea decode` or a Ghidra import would cost minutes against a short timeout. Hard-stops on the real terminationReason enum (ERROR/USER_CANCELED/MAX_INVOCATIONS/...); defers while fullyIdle is false; caps resumes at 2 per goal and 6 per session; marks the loop stuck and stops when the LEDGER did not advance across a resume. Fails open (prints a permit) on any error. Escape hatch: `python .agents/hooks/stop_verifier.py --off` (also --on, --status, --clear [--session X]). Verified: self-tests pass. The block reaches the agent as a SYSTEM_MESSAGE prefixed 'Stop hook blocked termination: '.",
+    "enabled": true,
+    "Stop": [
+      {
+        "type": "command",
+        "command": "python hooks/stop_verifier.py",
+        "timeout": 20
+      }
+    ]
+  },
+  "device-daemon": {
+    "_comment": "Owns the scrcpy-cli daemon so the agent never runs `daemon start`/`daemon stop` itself -- the device-control, runtime-extraction and traffic-capture skills just issue actions. Brings the daemon up on the first LLM call of a conversation (ALWAYS_START=True in scrcpy_daemon.py; set it False to start only when the transcript shows device work per SIGNALS -- rea scrcpy|mirror|pull|runtime, ui-dump, uiautomator, or an activated dynamic-analysis skill). Idempotent via a per-conversationId marker, so the ~50 PreInvocations in a session cost one marker check each. A 60s negative cache avoids re-probing when no device is attached. Stop is refcounted by conversationId so a finishing subagent cannot kill a daemon its parent is still using, and a daemon started by hand is never stopped. PreInvocation/Stop only -- a PreToolUse hook on run_command would have to return a decision for every shell command. Requires `scrcpy-cli` on PATH (installed globally by ReaKit's installer). Verified: 14/14 signal fixtures.",
+    "enabled": true,
+    "PreInvocation": [
+      {
+        "type": "command",
+        "command": "python hooks/scrcpy_daemon.py preinvocation",
+        "timeout": 10
+      }
+    ],
+    "Stop": [
+      {
+        "type": "command",
+        "command": "python hooks/scrcpy_daemon.py stop",
+        "timeout": 20
+      }
+    ]
+  }
+}

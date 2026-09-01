@@ -252,8 +252,14 @@ def _add_http_parser(subparsers):
     http_p = subparsers.add_parser(
         "http",
         aliases=["htk", "traffic"],
-        help="Start HTTP Toolkit and read captured API traffic (proxy, event log, MCP bridge)",
+        help="Listen to HTTP Toolkit's captured API traffic (bare 'rea http' streams live)",
     )
+    # Bare `rea http` listens: HTTP Toolkit, the device proxy and the CA are assumed
+    # to be wired already, so the default action is the one you actually want mid-session.
+    http_p.add_argument("--filter", "-f", help="HTTP Toolkit filter expression")
+    http_p.add_argument("--grep", "-g", help="Client-side regex filter on URL / source")
+    http_p.add_argument("--interval", type=float, default=2.0, help="Poll interval in seconds (default 2)")
+    http_p.add_argument("--limit", type=int, default=50, help="Exchanges to fetch per poll (default 50)")
     http_sub = http_p.add_subparsers(dest="http_action", help="HTTP Toolkit actions")
 
     # --- lifecycle ---
@@ -455,6 +461,10 @@ def create_parser() -> argparse.ArgumentParser:
     sp_p.add_argument("--skip-pip", action="store_true", help="Skip editable Python package installation (pip install -e .)")
     sp_p.add_argument("--skip-npm", action="store_true", help="Skip scrcpy-cli global linking (npm link)")
     sp_p.add_argument("--skip-ghidra", action="store_true", help="Skip automatic Ghidra download and GhidraMCP build")
+
+    # 13. harness - inject / manage the .agents/ agent harness in a target repo
+    from reakit.harness import add_harness_parser
+    add_harness_parser(subparsers)
 
     return parser
 
@@ -810,13 +820,15 @@ def _run_http(args, config_mgr) -> int:
     """Dispatches 'rea http <action>'."""
     action = getattr(args, "http_action", None)
     if not action:
-        log_error("An http subcommand is required.")
-        log_info(
-            "Typical flow: rea http start -> rea http android --on -> rea http watch "
-            "-> rea http show <id>"
+        # No subcommand means "listen": attach to the running app and stream traffic.
+        # Everything else (app launched, device proxied, CA trusted) is assumed done.
+        return watch_events(
+            HttpToolkit(config_mgr),
+            filter=args.filter,
+            interval=args.interval,
+            batch=args.limit,
+            grep=args.grep,
         )
-        log_info("Check prerequisites with: rea http setup")
-        return 2
 
     if action in ("setup", "doctor"):
         return htk_mod.doctor(config_mgr)
@@ -1216,6 +1228,10 @@ def main():
                 log_info(f"Saved to: {config_mgr.config_path}")
             else:
                 log_warn(f"Target '{args.package_or_alias}' was not found in config.")
+
+    elif cmd == "harness":
+        from reakit import harness
+        sys.exit(harness.handle(args))
 
     elif cmd in ("env", "check"):
         print_banner()

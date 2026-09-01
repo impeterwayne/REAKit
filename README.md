@@ -116,6 +116,25 @@ flowchart TD
 
 ---
 
+## Agentic Harness
+
+REAKit ships a drop-in **reverse-engineering agent harness** for Google Antigravity — a
+self-contained `.agents/` payload of always-on rules, 7 specialist agents, 15 domain skills, and
+5 deterministic safety hooks, injected into any engagement repo with `rea harness`. It follows the
+AndroidHarnessAGY standard, retargeted from building apps to reversing them: the agents delegate,
+cite evidence for every claim, and never hand-edit generated decompilation.
+
+```bash
+rea harness init /path/to/engagement           # full harness
+rea harness init /path/to/engagement --profile native   # focused profile
+rea harness list                               # rules, agents, skills, hooks, profiles
+```
+
+Profiles: `full` (default), `static`, `native`, `dynamic`, `minimal`. Full details in the
+**[Agentic Harness Guide](./docs/agent_harness.md)**.
+
+---
+
 ## Documentation Index
 
 1. **[CLI Reference Manual](./docs/cli_reference.md)** - Comprehensive manual for the `rea` CLI and all its subcommands.
@@ -125,8 +144,9 @@ flowchart TD
 5. **[Bytecode Decompilation & JADX Guide](./docs/decompilation.md)** - JADX memory safeguards, split APK merging, and decompilation.
 6. **[Runtime Extraction Guide](./docs/runtime_extraction.md)** - ADB privilege escalation (native root, Magisk su, run-as) and sandbox pulling.
 7. **[Native Library Analysis Guide](./docs/native_analysis.md)** - `.so` extraction, ELF/packer fingerprinting, and headless-or-GUI Ghidra analysis via GhidraMCP.
-8. **[API Traffic Capture Guide](./docs/http_toolkit.md)** - HTTP Toolkit lifecycle, device proxy wiring, and the captured-exchange log via `rea http`.
+8. **[API Traffic Capture Guide](./docs/http_toolkit.md)** - listening to live traffic with `rea http`, plus HTTP Toolkit lifecycle, device proxy wiring and the captured-exchange log.
 9. **[Configuration Schema Guide](./docs/workspace_config.md)** - Central `workspace_config.json` schema details.
+10. **[Agentic Harness Guide](./docs/agent_harness.md)** - The `.agents/` Antigravity reverse-engineering harness and the `rea harness` injector.
 
 ---
 
