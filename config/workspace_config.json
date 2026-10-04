@@ -28,6 +28,10 @@
     {
       "packageName": "com.ss.android.ugc.trill",
       "alias": "Trill"
+    },
+    {
+      "packageName": "com.beautyplus.makeupfilter.sweetcamera.photo",
+      "alias": "Photo"
     }
   ],
   "ghidraHome": "core/ghidra/ghidra_12.1.3_PUBLIC",

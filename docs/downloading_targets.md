@@ -16,8 +16,7 @@ graph TD
     Downloader --> Engine[core/apkdgo/bin/apkd / apkd.exe]
     
     Engine --> Sources{Download Sources}
-    Sources -->|Default / Fallback| ApkCombo[APKCombo]
-    Sources -->|F-Droid| FDroid[F-Droid]
+    Sources -->|Play Store apps| ApkPure[APKPure]
     Sources -->|RuStore| RuStore[RuStore]
     Sources -->|NashStore| NashStore[NashStore]
     
@@ -46,7 +45,7 @@ rea download [target] [options]
 |---|---|---|---|
 | `-t` | `--target <pkg_or_alias>` | Target package name or configured alias | Active target / all |
 | `-l` | `--link <url_or_pkg>` | Direct Play Store URL or package name | None |
-| `-s` | `--source <provider>` | Download source (`apkcombo`, `fdroid`, `rustore`, `nashstore`) | `apkcombo` |
+| `-s` | `--source <provider>` | Pin a source (`apkpure`, `rustore`, `nashstore`); retries with all sources if it fails | All sources |
 | | `--targets <file>` | Path to custom targets text file | None |
 | `-w` | `--workspace <dir>` | Custom workspace root directory path | `./workspaces` |
 | `-c` | `--config <file>` | Path to workspace configuration file | `config/workspace_config.json` |
@@ -73,11 +72,8 @@ rea dl "https://play.google.com/store/apps/details?id=com.zodiac.horoscope.palmr
 ```
 
 #### 4. Specify a Download Source Repository
-Download from alternative app repositories such as F-Droid, RuStore, or NashStore:
+Download from alternative app repositories such as RuStore or NashStore:
 ```bash
-# Download from F-Droid
-rea dl org.lichess.mobileV2 -s fdroid
-
 # Download from RuStore
 rea dl ru.vk.store -s rustore
 ```
@@ -128,6 +124,6 @@ Flags:
 1. **Network Timeout or Cloudflare Block:**
    Some aggregators rate-limit aggressive downloads. If downloads stall, verify your internet connection or use a proxy.
 2. **App Not Found on Source:**
-   If an app is not available on `apkcombo`, try switching sources with `-s fdroid` or `-s rustore`.
+   By default every source is queried and the newest version wins. If that download fails, apkd falls back to the next source that has the app, so a single blocked store no longer fails the download.
 3. **Force Redownload:**
    If an APK archive is incomplete or corrupted, run the download with force flag or remove the existing file in `workspaces/<package>/apks/`.

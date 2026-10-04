@@ -82,7 +82,7 @@ rea download [target] [options]
 | | `[target]` | Optional positional package name or Play Store URL |
 | `-l` | `--link <url_or_pkg>` | Direct Play Store URL or package name |
 | `-t` | `--target <pkg_or_alias>` | Target package name or configured alias |
-| `-s` | `--source <provider>` | Download source (`apkcombo`, `fdroid`, `rustore`, `nashstore`) |
+| `-s` | `--source <provider>` | Pin a source (`apkpure`, `rustore`, `nashstore`); falls back to all sources if it fails |
 | | `--targets <file>` | Path to custom targets text file |
 
 ```bash
@@ -92,8 +92,8 @@ rea dl
 # Download single package
 rea dl com.zodiac.horoscope.palmreader.scanpalmistry
 
-# Download from F-Droid
-rea dl org.lichess.mobileV2 -s fdroid
+# Download from RuStore
+rea dl ru.vk.store -s rustore
 ```
 
 ---
@@ -249,7 +249,7 @@ rea target list
 rea target add "https://play.google.com/store/apps/details?id=com.example.app"
 
 # Add target with custom alias and source
-rea target add com.example.app --alias "CustomApp" --source "fdroid"
+rea target add com.example.app --alias "CustomApp" --source "rustore"
 
 # Remove target
 rea target remove com.example.app

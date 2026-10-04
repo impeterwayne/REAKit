@@ -12,12 +12,12 @@ Fetches the target package into `workspaces/<package>/apks/` using the bundled `
 ```bash
 rea download <package>                    # e.g. rea download com.target.app
 rea download -l <play-store-or-direct-url>
-rea download <package> -s <source>        # apkcombo | fdroid | rustore | nashstore
+rea download <package> -s <source>        # apkpure | rustore | nashstore
 rea download --targets config/targets.txt # batch
 ```
 
 - Defaults to a sensible provider; pass `-s` when a package lives on a specific store (RuStore,
-  NashStore, F-Droid) or the default source 404s.
+  NashStore) or the default source 404s. A failed pinned source retries with all sources, and apkd falls back across sources on download errors.
 - Split APKs / XAPK bundles come down as a set under `apks/`; `rea decode` merges them.
 
 ## When to use

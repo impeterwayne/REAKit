@@ -31,7 +31,7 @@ A standard configuration file contains three primary keys:
     {
       "packageName": "org.lichess.mobileV2",
       "alias": "Lichess",
-      "source": "apkcombo",
+      "source": "apkpure",
       "sourceLink": "https://play.google.com/store/apps/details?id=org.lichess.mobileV2"
     }
   ]
@@ -71,7 +71,7 @@ Maintains the centralized list of targets, URLs, aliases, and download configura
 * **Object Entry:**
   * **`packageName` (String):** Canonical Android package identifier (e.g. `org.lichess.mobileV2`).
   * **`alias` (String, Optional):** Friendly, short directory alias (e.g. `Lichess`).
-  * **`source` (String, Optional):** Preferred APK download provider (`apkcombo`, `fdroid`, `rustore`, `nashstore`).
+  * **`source` (String, Optional):** Preferred APK download provider (`apkpure`, `rustore`, `nashstore`).
   * **`sourceLink` (String, Optional):** Original Play Store link or reference URL.
 
 ### 4. External Tool Locations (Optional)
@@ -100,7 +100,7 @@ rea target list
 rea target add "https://play.google.com/store/apps/details?id=com.zodiac.horoscope.palmreader.scanpalmistry&hl=en_US"
 
 # 3. Add target with explicit alias and download source
-rea target add "org.lichess.mobileV2" --alias "Lichess" --source "fdroid"
+rea target add "ru.vk.store" --alias "VKStore" --source "rustore"
 
 # 4. Remove target by package name or alias
 rea target remove com.example.app

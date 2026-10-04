@@ -370,7 +370,7 @@ def create_parser() -> argparse.ArgumentParser:
     dl_p.add_argument("target_pos", nargs="?", help="Target package name or URL (optional)")
     dl_p.add_argument("--link", "-l", help="Direct URL or package name to download")
     dl_p.add_argument("--target", "-t", help="Target package name or alias")
-    dl_p.add_argument("--source", "-s", help="Download source provider (apkcombo, fdroid, rustore, nashstore)")
+    dl_p.add_argument("--source", "-s", help="Pin a download source (apkpure, rustore, nashstore); falls back to all sources if it fails")
     dl_p.add_argument("--targets", help="Path to targets.txt")
     dl_p.add_argument("--workspace", "-w", help="Workspace root directory")
     dl_p.add_argument("--config", "-c", help="Path to workspace_config.json")
@@ -442,7 +442,7 @@ def create_parser() -> argparse.ArgumentParser:
     t_add = target_sub.add_parser("add", help="Add a target package or URL")
     t_add.add_argument("package_or_url", help="Package name or Play Store URL")
     t_add.add_argument("--alias", "-a", help="Friendly alias name")
-    t_add.add_argument("--source", "-s", help="Download source provider (e.g. apkcombo, fdroid)")
+    t_add.add_argument("--source", "-s", help="Download source provider (e.g. apkpure, rustore)")
     t_rm = target_sub.add_parser("remove", help="Remove a target package")
     t_rm.add_argument("package_or_alias", help="Package name or alias to remove")
 

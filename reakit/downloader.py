@@ -49,6 +49,22 @@ class Downloader:
         out_path.mkdir(parents=True, exist_ok=True)
         log_info(f"Downloading package '{pkg}' to {out_path.resolve()}...")
 
+        # apkd already falls back across every source it queries; a pinned
+        # source narrows that to one, so widen back out if it fails.
+        if self._run_apkd(pkg, out_path, source, extra_args):
+            return True
+        if source:
+            log_warn(f"Source '{source}' failed for {pkg}; retrying with all sources...")
+            return self._run_apkd(pkg, out_path, None, extra_args)
+        return False
+
+    def _run_apkd(
+        self,
+        pkg: str,
+        out_path: Path,
+        source: str | None,
+        extra_args: list[str] | None,
+    ) -> bool:
         cmd = [str(self.apkd_path.resolve()), "-p", pkg, "-O", str(out_path.resolve())]
         if source:
             cmd.extend(["-s", source])

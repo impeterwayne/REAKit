@@ -5,11 +5,9 @@
 This project is a command-line tool for downloading APK files from various sources.
 
 ## Supported Sources:
-- ApkCombo
-- F-Droid
 - RuStore (some apps may be unavailable from non-Russian IP addresses and appear as not found)
 - Nashstore (may not work for non-Russian IP addresses)
-- ApkPure (WIP)
+- ApkPure (via the `d.apkpure.com` direct-download endpoint)
 
 ## Usage
 
@@ -84,7 +82,7 @@ apkd [flags]
 - `--source-proxy`:
   Set proxy URL for a specific source in format `source=proxy-url` (can be repeated). Example:
   ```bash
-  apkd --source-proxy rustore=http://127.0.0.1:8081 --source-proxy fdroid=http://127.0.0.1:8082 -p com.example.app
+  apkd --source-proxy rustore=http://127.0.0.1:8081 --source-proxy apkpure=http://127.0.0.1:8082 -p com.example.app
   ```
 
 - `--workers`:
@@ -127,12 +125,12 @@ apkd -p com.example.app -s apkpure -O ./downloads
 
 Download a specific version code:
 ```bash
-apkd -p com.example.app:123456 -s fdroid -O ./downloads
+apkd -p com.example.app:123456 -s apkpure -O ./downloads
 ```
 
 Use global debug proxy:
 ```bash
-apkd --proxy http://127.0.0.1:8080 -p org.fdroid.fdroid
+apkd --proxy http://127.0.0.1:8080 -p org.telegram.messenger
 ```
 
 Use source-specific proxy overrides:
@@ -142,12 +140,12 @@ apkd --proxy http://127.0.0.1:8080 --source-proxy rustore=http://127.0.0.1:8081 
 
 Use intercepting proxy with disabled TLS verification:
 ```bash
-apkd --proxy http://127.0.0.1:8080 --proxy-insecure -p org.fdroid.fdroid
+apkd --proxy http://127.0.0.1:8080 --proxy-insecure -p org.telegram.messenger
 ```
 
 Use config defaults and override one value from CLI:
 ```bash
-apkd --config ./apkd.yaml --proxy http://127.0.0.1:8080 -p org.fdroid.fdroid
+apkd --config ./apkd.yaml --proxy http://127.0.0.1:8080 -p org.telegram.messenger
 ```
 
 ## Configuration
@@ -170,7 +168,7 @@ Example `apkd.yaml` (version 2):
 version: 2
 
 defaults:
-  sources: [rustore, fdroid]
+  sources: [rustore, apkpure]
   output_dir: ./downloads
   force: false
   verbose: 1

@@ -491,14 +491,14 @@ network:
 `)
 
 	forceDownload = false
-	selectedSources = []string{"apkcombo"}
+	selectedSources = []string{"apkpure"}
 	workers = 7
 	globalProxy = "http://127.0.0.1:9000"
 	sourceProxyEntries = []string{"fdroid=http://127.0.0.1:9999"}
 	cmd := newConfigApplyCommand(
 		t,
 		"--force=false",
-		"--source=apkcombo",
+		"--source=apkpure",
 		"--workers=7",
 		"--proxy=http://127.0.0.1:9000",
 		"--source-proxy=fdroid=http://127.0.0.1:9999",
@@ -511,7 +511,7 @@ network:
 	if forceDownload {
 		t.Fatalf("expected CLI force value to remain false")
 	}
-	if len(selectedSources) != 1 || selectedSources[0] != "apkcombo" {
+	if len(selectedSources) != 1 || selectedSources[0] != "apkpure" {
 		t.Fatalf("expected CLI selectedSources to remain unchanged, got %v", selectedSources)
 	}
 	if workers != 7 {

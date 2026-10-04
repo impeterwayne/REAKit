@@ -1,12 +1,15 @@
 package main
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"io"
 	"log"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -33,6 +36,19 @@ type VersionTask struct {
 	Version sources.Version
 	Source  sources.Source
 	Bar     *mpb.Bar
+	// Fallbacks are tried in order when downloading from Source fails.
+	Fallbacks []VersionCandidate
+}
+
+type VersionCandidate struct {
+	Version sources.Version
+	Source  sources.Source
+}
+
+// localDownloadError marks failures that another source cannot fix
+// (existing output file, unwritable output path).
+type localDownloadError struct {
+	error
 }
 
 type TaskQueue struct {
@@ -208,22 +224,31 @@ func (tq *TaskQueue) processPackageTask(task PackageTask) {
 		p := 3000 - bar.ID()
 		bar.SetPriority(p)
 	}
-	version, source, errs := tq.findVersion(task.PackageName, task.VersionCode)
-	if version == (sources.Version{}) || source == nil {
+	candidates, errs := tq.findVersion(task.PackageName, task.VersionCode)
+	if len(candidates) == 0 {
+		for _, e := range errs {
+			reportError(fmt.Sprintf("Error finding package %s at source %s: %v", e.PackageName, e.SourceName, e.Err))
+		}
 		if len(errs) == 0 {
 			reportError(fmt.Sprintf("Package %s not found in active sources", task.PackageName))
 		}
 		tq.removeBar(bar)
 		return
 	}
+	// Another source found the package, so search failures are not fatal.
+	for _, e := range errs {
+		logger.Logw(fmt.Sprintf("Error finding package %s at source %s: %v", e.PackageName, e.SourceName, e.Err))
+	}
+	version, source := candidates[0].Version, candidates[0].Source
 	var wg2 sync.WaitGroup
 	wg2.Add(1)
 	go func() {
 		defer wg2.Done()
 		tq.processVersionTask(VersionTask{
-			Version: version,
-			Source:  source,
-			Bar:     bar,
+			Version:   version,
+			Source:    source,
+			Bar:       bar,
+			Fallbacks: candidates[1:],
 		})
 	}()
 	defer wg2.Wait()
@@ -276,14 +301,36 @@ func (tq *TaskQueue) processVersionTask(task VersionTask) {
 		p := 3000 - bar.ID()
 		bar.SetPriority(p)
 	}
+	tq.activeDownloadTasks.Add(1)
+	err := tq.downloadVersion(task, bar)
+	tq.activeDownloadTasks.Add(-1)
+	tq.removeBar(bar)
+	if err == nil {
+		reportDownloadSuccess()
+		logger.Logd(fmt.Sprintf("Package %s downloaded successfully", task.Version.PackageName))
+		return
+	}
+	var localErr localDownloadError
+	if errors.As(err, &localErr) || len(task.Fallbacks) == 0 {
+		reportError(err.Error())
+		return
+	}
+	next := task.Fallbacks[0]
+	logger.Logw(fmt.Sprintf("%v; falling back to source %s (v%s)", err, next.Source.Name(), next.Version.Name))
+	tq.processVersionTask(VersionTask{
+		Version:   next.Version,
+		Source:    next.Source,
+		Fallbacks: task.Fallbacks[1:],
+	})
+}
+
+func (tq *TaskQueue) downloadVersion(task VersionTask, bar *mpb.Bar) error {
 	var outFile string
 	if outputFileName != "" {
 		outFile = outputFileName
 	} else {
 		if task.Version.Type == "" {
-			reportError("File type not found for package " + task.Version.PackageName)
-			tq.removeBar(bar)
-			return
+			return fmt.Errorf("file type not found for package %s at source %s", task.Version.PackageName, task.Source.Name())
 		}
 		outFile = fmt.Sprintf("%s-%s-v%d.%s", task.Version.PackageName, task.Version.Name, task.Version.Code, task.Version.Type)
 		outFile = sanitizeFileName(outFile)
@@ -293,25 +340,17 @@ func (tq *TaskQueue) processVersionTask(task VersionTask) {
 	}
 	if _, err := os.Stat(outFile); err == nil {
 		if !forceDownload {
-			reportError(fmt.Sprintf("File %s already exists. Use --force to overwrite.", outFile))
-			tq.removeBar(bar)
-			return
+			return localDownloadError{fmt.Errorf("file %s already exists. Use --force to overwrite", outFile)}
 		}
 		logger.Logd(fmt.Sprintf("File %s already exists. Removing...", outFile))
 		if err := os.Remove(outFile); err != nil {
-			reportError(fmt.Sprintf("Error removing existing file %s: %v", outFile, err))
-			tq.removeBar(bar)
-			return
+			return localDownloadError{fmt.Errorf("error removing existing file %s: %w", outFile, err)}
 		}
 	}
 	logger.Logd(fmt.Sprintf("Downloading package %s from source %s to file %s", task.Version.PackageName, task.Source.Name(), outFile))
-	tq.activeDownloadTasks.Add(1)
-	defer tq.activeDownloadTasks.Add(-1)
 	stream, err := task.Source.Download(task.Version)
 	if err != nil {
-		reportError(fmt.Sprintf("Error downloading package %s from source %s: %v", task.Version.PackageName, task.Source.Name(), err))
-		tq.removeBar(bar)
-		return
+		return fmt.Errorf("error downloading package %s from source %s: %w", task.Version.PackageName, task.Source.Name(), err)
 	}
 	// Prefer Content-Length from the response (authoritative). Fall back to
 	// source-reported metadata size, which is sometimes inaccurate. Zero means
@@ -325,63 +364,40 @@ func (tq *TaskQueue) processVersionTask(task VersionTask) {
 	}
 	bar.SetTotal(barSize, false)
 	progressReader := bar.ProxyReader(stream.Body)
-	progressReaderClosed := false
-	defer func() {
-		if progressReaderClosed {
-			return
-		}
-		if closeErr := progressReader.Close(); closeErr != nil {
-			reportError(fmt.Sprintf("Error closing download stream for package %s: %v", task.Version.PackageName, closeErr))
-		}
-	}()
+	defer progressReader.Close()
+
 	source, isRuStore := task.Source.(*sources.RuStore)
 	downloadPath := outFile
 	if isRuStore {
 		downloadPath = outFile + ".download"
 		if err := os.Remove(downloadPath); err != nil && !os.IsNotExist(err) {
-			reportError(fmt.Sprintf("Error removing existing temporary file %s: %v", downloadPath, err))
-			tq.removeBar(bar)
-			return
+			return localDownloadError{fmt.Errorf("error removing existing temporary file %s: %w", downloadPath, err)}
 		}
 	}
 
 	file, err := os.Create(downloadPath)
 	if err != nil {
-		reportError(fmt.Sprintf("Error creating file %s: %v", downloadPath, err))
-		tq.removeBar(bar)
-		return
+		return localDownloadError{fmt.Errorf("error creating file %s: %w", downloadPath, err)}
 	}
+	// Drop partial output so a fallback source (same file name) or the caller
+	// never mistakes it for a finished package.
 	if _, err = io.Copy(file, progressReader); err != nil {
-		if closeErr := file.Close(); closeErr != nil {
-			reportError(fmt.Sprintf("Error closing file %s after write error: %v", downloadPath, closeErr))
-		}
-		reportError(fmt.Sprintf("Error saving file %s: %v", downloadPath, err))
-		tq.removeBar(bar)
-		return
+		_ = file.Close()
+		_ = os.Remove(downloadPath)
+		return fmt.Errorf("error saving file %s from source %s: %w", downloadPath, task.Source.Name(), err)
 	}
 	if err := file.Close(); err != nil {
-		reportError(fmt.Sprintf("Error closing file %s: %v", downloadPath, err))
-		tq.removeBar(bar)
-		return
+		_ = os.Remove(downloadPath)
+		return localDownloadError{fmt.Errorf("error closing file %s: %w", downloadPath, err)}
 	}
-	if err := progressReader.Close(); err != nil {
-		reportError(fmt.Sprintf("Error closing download stream for package %s: %v", task.Version.PackageName, err))
-		tq.removeBar(bar)
-		return
-	}
-	progressReaderClosed = true
 	if isRuStore {
 		// workaround for rustore: sometimes it responds with a zip file in which the APK is stored
-		err := source.ExtractApkFromZip(downloadPath, outFile)
-		if err != nil {
-			reportError(fmt.Sprintf("Error extracting APK from zip file %s: %v", downloadPath, err))
-			tq.removeBar(bar)
-			return
+		if err := source.ExtractApkFromZip(downloadPath, outFile); err != nil {
+			_ = os.Remove(outFile)
+			return fmt.Errorf("error extracting APK from zip file %s: %w", downloadPath, err)
 		}
 	}
-	tq.removeBar(bar)
-	reportDownloadSuccess()
-	logger.Logd(fmt.Sprintf("Package %s downloaded successfully", task.Version.PackageName))
+	return nil
 }
 
 func (tq *TaskQueue) removeBar(prevBar *mpb.Bar) {
@@ -391,11 +407,13 @@ func (tq *TaskQueue) removeBar(prevBar *mpb.Bar) {
 	prevBar.Abort(true)
 }
 
-func (tq *TaskQueue) findVersion(packageName string, versionCode int) (sources.Version, sources.Source, []sources.Error) {
+// findVersion queries every active source and returns the ones that have the
+// package, newest version first. Search errors are returned, not reported, so
+// the caller can decide whether they matter.
+func (tq *TaskQueue) findVersion(packageName string, versionCode int) ([]VersionCandidate, []sources.Error) {
 	var wg sync.WaitGroup
 	var mu sync.Mutex
-	var latestSource sources.Source
-	var latestVersion sources.Version
+	var candidates []VersionCandidate
 	var sourcesErrors []sources.Error
 	logger.Logd(fmt.Sprintf("Searching for package %s in %d sources", packageName, len(activeSources)))
 	for _, source := range activeSources {
@@ -406,7 +424,7 @@ func (tq *TaskQueue) findVersion(packageName string, versionCode int) (sources.V
 			if err != nil {
 				var appNotFoundError *sources.AppNotFoundError
 				if !errors.As(err, &appNotFoundError) {
-					reportError(fmt.Sprintf("Error finding package %s at source %s: %v", packageName, src.Name(), err))
+					logger.Logd(fmt.Sprintf("Error finding package %s at source %s: %v", packageName, src.Name(), err))
 					mu.Lock()
 					sourcesErrors = append(sourcesErrors, sources.Error{
 						SourceName:  src.Name(),
@@ -423,17 +441,27 @@ func (tq *TaskQueue) findVersion(packageName string, versionCode int) (sources.V
 				logger.Logd(fmt.Sprintf("Skipping package %s v%s at source %s: type %s (--only-apk)", packageName, version.Name, src.Name(), version.Type))
 				return
 			}
-			mu.Lock()
-			logger.Logd(fmt.Sprintf("Found package %s v%s (%v) at source %s", packageName, version.Name, version.Code, src.Name()))
-			if version.Code > latestVersion.Code {
-				latestVersion = version
-				latestSource = src
+			if version.Code == 0 {
+				return
 			}
+			logger.Logd(fmt.Sprintf("Found package %s v%s (%v) at source %s", packageName, version.Name, version.Code, src.Name()))
+			mu.Lock()
+			candidates = append(candidates, VersionCandidate{Version: version, Source: src})
 			mu.Unlock()
 		}(source)
 	}
 
 	wg.Wait()
 
-	return latestVersion, latestSource, sourcesErrors
+	slices.SortStableFunc(candidates, func(a, b VersionCandidate) int {
+		if c := cmp.Compare(b.Version.Code, a.Version.Code); c != 0 {
+			return c
+		}
+		return strings.Compare(a.Source.Name(), b.Source.Name())
+	})
+	slices.SortStableFunc(sourcesErrors, func(a, b sources.Error) int {
+		return strings.Compare(a.SourceName, b.SourceName)
+	})
+
+	return candidates, sourcesErrors
 }

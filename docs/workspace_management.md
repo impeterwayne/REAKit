@@ -95,7 +95,7 @@ REA_Kit Project Context:
 
 Configured Target Applications (2):
   1. com.zodiac.horoscope.palmreader.scanpalmistry (Alias: Scanpalmistry) (https://play.google.com/store/apps/details?id=com.zodiac.horoscope.palmreader.scanpalmistry)
-  2. org.lichess.mobileV2 (Alias: Lichess) [Source: fdroid]
+  2. ru.vk.store (Alias: VKStore) [Source: rustore]
 
 Workspace Directory Status (2):
   * com.zodiac.horoscope.palmreader.scanpalmistry: 1 APK(s), Decompiled, 4 runtime files (workspaces\com.zodiac.horoscope.palmreader.scanpalmistry)
@@ -109,7 +109,7 @@ Add targets using package IDs or direct Play Store links (with optional custom a
 rea target add "https://play.google.com/store/apps/details?id=com.example.app"
 
 # Add with custom alias and source repository
-rea target add com.example.app --alias "CustomApp" --source "apkcombo"
+rea target add com.example.app --alias "CustomApp" --source "apkpure"
 ```
 
 ### 3. Remove a Target Application
