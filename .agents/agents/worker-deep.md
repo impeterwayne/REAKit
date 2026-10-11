@@ -74,8 +74,8 @@ caught your mistake:
 
 - Re-run the offline `rea` command that reproduces it (`rea native decompile <fn>`, `rea native
   info`, `rea http show <id>`) and quote the relevant output.
-- If you wrote a hook, confirm it against a live device where one is attached (`rea scrcpy
-  device-list` first) and quote the logged value. If no device is available, say so — do not
+- If you wrote a hook, confirm it against a live device where one is attached (`rea device
+  list` first) and quote the logged value. If no device is available, say so — do not
   claim it fires.
 - Record the exact command and its exit code / key output in your report.
 

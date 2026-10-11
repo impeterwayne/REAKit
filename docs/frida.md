@@ -24,7 +24,7 @@ flowchart LR
     AGENT -. send() messages .-> CLI
     CLI -->|rea frida probe| WS[("workspaces/&lt;pkg&gt;/dynamic/frida")]
     CLI -->|rea frida mcp| AI["AI client<br/>(Claude Code, etc.)"]
-    SCRCPY["rea scrcpy<br/>drives the app"] -.-> APP
+    DEVICE["rea device / mobilerun<br/>drives the app"] -.-> APP
 ```
 
 ---
@@ -107,7 +107,7 @@ rea frida doctor                      # confirm the backend is live
 rea frida ps --running                # find the target; note its PID
 rea frida probe com.example.app --script probe_net --spawn --duration 120
 # ...in another terminal, drive the app:
-rea scrcpy tap 500 1200
+rea device tap 500 1200
 ```
 
 Spawn when timing matters (startup, first network call); attach otherwise. When spawning, hooks are

@@ -56,6 +56,7 @@ workspaces/
 AndroidHarnessAGY/
 apk-reverse/
 ya-frida-mcp/
+/mobilerun-mcp
 
 # Ghidra release binary + JDK: large downloaded artifacts, fetched not tracked
 # (core/ghidra_mcp is a git submodule - see .gitmodules)

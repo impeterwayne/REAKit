@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "mobilerun": {
+      "type": "stdio",
+      "command": "rea",
+      "args": ["device", "mcp"]
+    }
+  }
+}

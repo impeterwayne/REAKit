@@ -21,7 +21,7 @@ flowchart LR
     API -->|rea http events / show / body| CLI["Your terminal"]
     API -->|rea http mcp| AI["AI client<br/>(Claude Code, etc.)"]
     CLI -->|rea http events --save| WS[("workspaces/&lt;pkg&gt;/traffic")]
-    SCRCPY["rea scrcpy<br/>drives the app"] -.-> DEV
+    DEVICE["rea device / mobilerun<br/>drives the app"] -.-> DEV
 ```
 
 ---
@@ -105,7 +105,7 @@ listens** — that is the command you want mid-session:
 ```bash
 rea http                          # stream new exchanges while you drive the app
 # ...in another terminal:
-rea scrcpy tap 500 1200           # drive the UI; traffic appears in the feed
+rea device tap 500 1200           # drive the UI; traffic appears in the feed
 rea http events -f "hostname*=api"
 rea http show 4a72e9f1            # headers, status, timing, body sizes
 rea http body 4a72e9f1 --response # dump the response body
@@ -200,7 +200,7 @@ target.
 ### `rea http` / `rea http watch` (`tail`)
 
 Polls the API and prints only exchanges it has not seen yet — the backlog is noted and skipped, so
-the feed is live traffic only. Pair it with `rea scrcpy` in another terminal. This is what a bare
+the feed is live traffic only. Pair it with `rea device` in another terminal. This is what a bare
 `rea http` does, so the subcommand is optional.
 
 ```bash

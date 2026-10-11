@@ -76,6 +76,7 @@ from reakit.fridakit import (
     run_probe,
 )
 from reakit import fridakit as frida_mod
+from reakit import mobilerun as mobilerun_mod
 import os
 
 def _add_target_args(parser: argparse.ArgumentParser, positional_help: str = "Target package name or alias"):
@@ -503,6 +504,67 @@ def _add_frida_parser(subparsers):
     return frida_p
 
 
+def _add_device_parser(subparsers):
+    """Registers 'rea device' - Android device control through mobilerun-mcp."""
+    # -s/--serial and --json are accepted both before the action (rea device -s X tap ..)
+    # and after it (rea device tap .. -s X). The per-action copies default to SUPPRESS
+    # so they never overwrite a value given at the group level.
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("-s", "--serial", default=argparse.SUPPRESS, help="Target device serial (sets MOBILERUN_DEVICE)")
+    common.add_argument("--json", action="store_true", default=argparse.SUPPRESS, help="Print the raw JSON result")
+
+    dev_p = subparsers.add_parser(
+        "device",
+        aliases=["dev"],
+        help="Android device control via mobilerun-mcp (tap, type, screenshot, UI tree, MCP server)",
+    )
+    dev_p.add_argument("-s", "--serial", help="Target device serial (sets MOBILERUN_DEVICE; default: the only attached device)")
+    dev_p.add_argument("--json", action="store_true", help="Print the raw JSON result instead of human output")
+    dev_sub = dev_p.add_subparsers(dest="device_action", help="Device actions")
+
+    def add(name, help_text, **kw):
+        return dev_sub.add_parser(name, help=help_text, parents=[common], **kw)
+
+    mcp_p = add("mcp", "Run the mobilerun MCP server (stdio; --http for streamable HTTP)")
+    mcp_p.add_argument("--config", dest="device_mcp_config", action="store_true", help="Print MCP client configuration and exit")
+    mcp_p.add_argument("--http", action="store_true", help="Serve streamable HTTP at http://127.0.0.1:<port>/mcp instead of stdio")
+    mcp_p.add_argument("--port", type=int, default=mobilerun_mod.DEFAULT_HTTP_PORT, help=f"HTTP port (default {mobilerun_mod.DEFAULT_HTTP_PORT})")
+
+    add("list", "List attached devices (adb devices)")
+    add("setup", "Install and enable the Mobilerun Portal APK on the device")
+    add("doctor", "Run mobilerun's device diagnostic (adb, Portal, accessibility)")
+
+    shot_p = add("screenshot", "Save a PNG screenshot")
+    shot_p.add_argument("out", help="Output .png path (parent dirs are created)")
+    ui_p = add("ui-dump", "Save the Portal accessibility UI tree as JSON")
+    ui_p.add_argument("out", help="Output .json path (parent dirs are created)")
+
+    tap_p = add("tap", "Tap at screen coordinates")
+    tap_p.add_argument("x", type=int)
+    tap_p.add_argument("y", type=int)
+    sw_p = add("swipe", "Swipe between two points")
+    for coord in ("x1", "y1", "x2", "y2"):
+        sw_p.add_argument(coord, type=int)
+    sw_p.add_argument("ms", type=int, nargs="?", help="Duration in ms (default 300)")
+    wr_p = add("write", "Type text into the focused field")
+    wr_p.add_argument("text")
+    key_p = add("key", "Press a key by name (back, home, enter, recents, ...) or Android keycode (e.g. 66)")
+    key_p.add_argument("key")
+
+    as_p = add("app-start", "Start an app (optionally a specific activity)")
+    as_p.add_argument("package")
+    as_p.add_argument("activity", nargs="?")
+    ast_p = add("app-stop", "Force-stop an app")
+    ast_p.add_argument("package")
+    apps_p = add("apps", "List installed apps (user apps unless --system)")
+    apps_p.add_argument("--system", action="store_true", help="Include system apps")
+
+    add("clipboard-get", "Print the device clipboard text")
+    cs_p = add("clipboard-set", "Set the device clipboard text")
+    cs_p.add_argument("text")
+    return dev_p
+
+
 def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="rea",
@@ -571,9 +633,8 @@ def create_parser() -> argparse.ArgumentParser:
     # 5d. frida / fr - frida-server lifecycle and dynamic instrumentation
     _add_frida_parser(subparsers)
 
-    # 6. scrcpy / control
-    scrcpy_p = subparsers.add_parser("scrcpy", aliases=["control"], help="Android device automation via scrcpy-cli")
-    scrcpy_p.add_argument("scrcpy_args", nargs=argparse.REMAINDER, help="Arguments passed directly to scrcpy-cli")
+    # 6. device / dev - device control via mobilerun-mcp (CLI + MCP server)
+    _add_device_parser(subparsers)
 
     # 7. mirror / screen
     mirror_p = subparsers.add_parser("mirror", aliases=["screen"], help="Launch interactive scrcpy screen mirroring window")
@@ -619,7 +680,8 @@ def create_parser() -> argparse.ArgumentParser:
     sp_p.add_argument("--session", action="store_true", help="Configure PATH for current session only")
     sp_p.add_argument("--check", action="store_true", help="Check current environment & PATH status")
     sp_p.add_argument("--skip-pip", action="store_true", help="Skip editable Python package installation (pip install -e .)")
-    sp_p.add_argument("--skip-npm", action="store_true", help="Skip scrcpy-cli global linking (npm link)")
+    sp_p.add_argument("--skip-npm", action="store_true", help="Skip the Node-driven scrcpy/adb binary download")
+    sp_p.add_argument("--skip-mobilerun", action="store_true", help="Skip the mobilerun-mcp venv install (rea device)")
     sp_p.add_argument("--skip-ghidra", action="store_true", help="Skip automatic Ghidra download and GhidraMCP build")
     sp_p.add_argument("--skip-frida", action="store_true", help="Skip the optional host-side Frida package install hint/check")
 
@@ -1630,11 +1692,8 @@ def main():
     elif cmd in ("frida", "fr", "instrument"):
         sys.exit(_run_frida(args, config_mgr))
 
-    elif cmd in ("scrcpy", "control"):
-        bridge = ScrcpyBridge()
-        scrcpy_args = getattr(args, "scrcpy_args", [])
-        ret = bridge.run_cli(scrcpy_args)
-        sys.exit(ret)
+    elif cmd in ("device", "dev"):
+        sys.exit(mobilerun_mod.handle(args))
 
     elif cmd in ("mirror", "screen"):
         bridge = ScrcpyBridge()
@@ -1732,13 +1791,14 @@ def main():
                 link_npm=not getattr(args, "skip_npm", False),
                 setup_ghidra=not getattr(args, "skip_ghidra", False),
                 skip_frida=getattr(args, "skip_frida", False),
+                setup_mobilerun=not getattr(args, "skip_mobilerun", False),
             )
             if added:
                 log_success("Configured PATH for REA_Kit tools:")
                 for p in added:
                     print(f"    * {p}")
                 if permanent:
-                    log_info("Newly opened terminals will immediately recognize 'rea', 'adb', 'scrcpy', 'jadx', and 'apkd'.")
+                    log_info("Newly opened terminals will immediately recognize 'rea', 'adb', 'scrcpy', 'jadx', and 'apkd' ('rea device' drives the device).")
             else:
                 log_info("All REA_Kit tool directories are already configured in User PATH.")
             print("")

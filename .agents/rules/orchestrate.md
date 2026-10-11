@@ -52,7 +52,7 @@ scarcest thing in the run on work a cheap subagent was going to do anyway.
 | `oracle` | Deobfuscation strategy, crypto/protocol identification, a hypothesis that survived 2 dead ends, review of a finding | expensive |
 | `native-analyst` | JNI / `.so` reversing via `rea native` + Ghidra: decompile, trace, name the routine | expensive |
 | `traffic-analyst` | API traffic via `rea http`: correlate requests, find the signing/session logic behind them | moderate |
-| `business-analyst` | Drive the app with `rea scrcpy`: screenshot each state, write a functional spec under `workspaces/<package>/docs/spec/` | moderate |
+| `business-analyst` | Drive the app with the `mobilerun` MCP tools (`rea device` for saved captures): screenshot each state, write a functional spec under `workspaces/<package>/docs/spec/` | moderate |
 | `screen-analyst` | Read a captured screenshot against its dump: custom views, icon-only controls, visual state the dump misses | cheap |
 | `worker-quick` | One script, known shape, mechanical change | cheap |
 | `worker-deep` | Multi-file tooling, a hook that needs a device run, an end-to-end deobfuscator | expensive |

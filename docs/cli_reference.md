@@ -33,7 +33,7 @@ These options apply across all relevant subcommands:
 | [`rea frida`](./frida.md) | `fr`, `instrument` | Instrument a running app via Frida (manage frida-server, inject probes, hook, RPC, memory) | `rea frida probe com.example.app --script probe_net --spawn` |
 | [`rea pull`](#4-rea-pull--rea-runtime) | `runtime` | Extract app sandbox files via ADB (root/su/run-as) | `rea pull com.example.app` |
 | [`rea pipeline`](#5-rea-pipeline--rea-all--rea-run) | `all`, `run` | Execute complete static pipeline (init -> dl -> decode) | `rea pipeline -t com.example.app` |
-| [`rea scrcpy`](#6-rea-scrcpy--rea-control) | `control` | Low-latency device automation via `scrcpy-cli` | `rea scrcpy tap 500 1200` |
+| [`rea device`](#6-rea-device--rea-dev) | `dev` | Device automation via the mobilerun engine (MCP server + CLI) | `rea device tap 500 1200` |
 | [`rea mirror`](#7-rea-mirror--rea-screen) | `screen` | Launch desktop screen mirroring window | `rea mirror -s emulator-5554` |
 | [`rea jadx-gui`](#8-rea-jadx-gui) | | Launch interactive graphical JADX decompiler | `rea jadx-gui -t com.example.app` |
 | [`rea apktool`](#9-rea-apktool) | | Disassemble / reassemble APKs using APKTool | `rea apktool d app.apk -o out` |
@@ -168,29 +168,44 @@ rea pipeline -t https://play.google.com/store/apps/details?id=com.zodiac.horosco
 
 ---
 
-### 6. `rea scrcpy` (`rea control`)
-Automates Android devices with sub-millisecond latency using the bundled `scrcpy-cli` engine.
+### 6. `rea device` (`rea dev`)
+Automates Android devices through the vendored **mobilerun** engine. Agents drive it as an MCP
+server (observe → act → verify); scripts and saved artifacts use the CLI. There is no daemon to
+start or stop. Full guide: [Device Control & Automation Guide](./device_control.md).
 
 ```bash
-rea scrcpy [daemon|action] [args...]
+rea device [subcommand] [args...]
 ```
 
 ```bash
-# Daemon Management
-rea scrcpy daemon start
-rea scrcpy daemon status
-rea scrcpy daemon stop
+# MCP server (for AI clients)
+rea device mcp --config                 # print ready-to-paste MCP client configuration
+rea device mcp                          # run the stdio MCP server (--http [--port N] for HTTP)
+
+# Device & setup
+rea device list                         # list connected ADB devices
+rea device setup                        # install + enable the Mobilerun Portal APK
+rea device doctor                       # diagnose ADB, connection, Portal permissions
 
 # Gestures & Input
-rea scrcpy tap 540 1200
-rea scrcpy swipe 540 1600 540 400 300
-rea scrcpy write "Search term"
-rea scrcpy key HOME
+rea device tap 540 1200
+rea device swipe 540 1600 540 400 300
+rea device write "Search term"
+rea device key HOME
 
-# Capture & UI Dump
-rea scrcpy screenshot app_home.png
-rea scrcpy ui-dump layout.xml
+# Capture & accessibility dump
+rea device screenshot app_home.png
+rea device ui-dump layout.json          # accessibility tree as JSON (no XML)
+
+# Apps & clipboard
+rea device app-start com.example.app
+rea device app-stop com.example.app
+rea device apps [--system]
+rea device clipboard-get | clipboard-set "text"
 ```
+
+Group flags: `-s/--serial <serial>` (or `MOBILERUN_DEVICE`) picks a device; `--json` for
+machine-readable output.
 
 ---
 
@@ -268,7 +283,7 @@ rea env
 ---
 
 ### 12. `rea install` (`rea setup`, `rea setup-path`)
-Automated installer and environment configurator for REA_Kit across Linux, macOS, and Windows. Automatically registers PATH for all bundled tools (`rea`, `adb`, `scrcpy`, `jadx`, `apkd`, `apktool`, `scrcpy-cli`), configures runtime environment variables, bundles platform native binaries for `scrcpy` & `adb` (v4.1), compiles `apkd` via Go, downloads and configures **Ghidra 12.x** and **GhidraMCP**, and registers the `reakit` Python package.
+Automated installer and environment configurator for REA_Kit across Linux, macOS, and Windows. Automatically registers PATH for all bundled tools (`rea`, `adb`, `scrcpy`, `jadx`, `apkd`, `apktool`), configures runtime environment variables, bundles platform native binaries for `scrcpy` & `adb` (v4.1), builds the **mobilerun** device-automation venv (Python 3.11–3.13, via `uv`), compiles `apkd` via Go, downloads and configures **Ghidra 12.x** and **GhidraMCP**, and registers the `reakit` Python package.
 
 ```bash
 # Standard complete installation across all platforms (Permanent)
@@ -279,7 +294,7 @@ rea install         # CLI direct
 # Custom installation flags
 rea install --skip-ghidra # Skip automatic Ghidra release download
 rea install --skip-pip    # Skip pip editable install
-rea install --skip-npm    # Skip npm scrcpy-cli linking
+rea install --skip-mobilerun # Skip building the mobilerun device-automation venv
 rea install --session     # Configure PATH for current terminal session only
 rea install --check       # Check installation & environment status
 ```

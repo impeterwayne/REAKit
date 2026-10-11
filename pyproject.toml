@@ -23,7 +23,6 @@ dependencies = []
 [project.scripts]
 rea = "reakit.cli:main"
 reakit = "reakit.cli:main"
-scrcpy-cli = "reakit.scrcpy:scrcpy_cli_main"
 
 [tool.setuptools.packages.find]
 where = ["."]

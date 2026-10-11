@@ -4,3 +4,6 @@
 [submodule "core/ghidra_mcp"]
 	path = core/ghidra_mcp
 	url = https://github.com/bethington/ghidra-mcp
+[submodule "core/mobilerun_mcp"]
+	path = core/mobilerun_mcp
+	url = https://github.com/impeterwayne/mobilerun_mcp.git

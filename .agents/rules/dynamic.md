@@ -4,16 +4,18 @@ trigger: always_on
 
 # Dynamic Analysis Rule: device and traffic hygiene
 
-Applies whenever the task drives a live device or captures traffic — `rea scrcpy`, `rea mirror`,
-`rea pull`, `rea http`, `rea frida`, or any hook/instrumentation run. Static-only tasks can ignore it.
+Applies whenever the task drives a live device or captures traffic — the `mobilerun` MCP server,
+`rea device`, `rea mirror`, `rea pull`, `rea http`, `rea frida`, or any hook/instrumentation run.
+Static-only tasks can ignore it.
 
 ## Before touching the device
 
-- **Confirm a device is attached** (`rea env` / `rea scrcpy device-list`). One target device;
-  name the serial with `-s` when more than one is connected.
-- **The daemon is managed for you.** The `device-daemon` hook starts and stops `scrcpy-cli`.
-  Do not run `daemon start` / `daemon stop` yourself — just issue actions (`tap`, `ui-dump`,
-  `app-start`, `screenshot`).
+- **Confirm a device is attached** (`rea env` / `rea device list`). One target device;
+  name the serial with `-s` (or `MOBILERUN_DEVICE`) when more than one is connected.
+- **Drive through mobilerun; connect on demand.** Agents use the `mobilerun` MCP server (observe →
+  act → verify); scripts and saved artifacts use the `rea device` CLI. There is no daemon to
+  start or stop — just issue actions (`tap`, `ui-dump`, `app-start`, `screenshot`). If the Portal
+  isn't installed or its accessibility service is off, run `rea device setup` / `rea device doctor`.
 - **Runtime extraction needs privilege.** `rea pull` escalates via native root, Magisk `su`, or
   `run-as` (debuggable builds). If a pull comes back empty, check which path applied before
   assuming there is nothing to pull.

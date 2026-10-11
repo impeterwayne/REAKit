@@ -10,7 +10,7 @@ This module is the network half of a target, the counterpart to :mod:`reakit.nat
   and exposes the captured-exchange log (``events.*``), proxy config and interceptor
   state as ordinary Python calls.
 * The Android helpers point a connected device at the running proxy over ADB, so
-  ``rea http`` slots into the same dynamic loop as ``rea scrcpy`` and ``rea pull``.
+  ``rea http`` slots into the same dynamic loop as ``rea device`` and ``rea pull``.
 
 Tiering note: HTTP Toolkit gates its remote-control API by account tier, and the gate
 keys off the ``source`` field of ``/api/execute``. ``source: "ctl"`` requires Pro for
@@ -767,7 +767,7 @@ def watch_events(
     """Streams newly captured exchanges until interrupted.
 
     The API has no push channel, so this polls the *tail* of the log and prints only
-    ids it has not seen yet - enough to follow a live session driven by `rea scrcpy`.
+    ids it has not seen yet - enough to follow a live session driven by `rea device`.
     Polling from offset 0 would pin the window to the oldest exchanges and never
     surface new traffic, since ``events.list`` paginates oldest-first.
     """
@@ -1098,7 +1098,7 @@ def print_setup_help():
 
   {Colors.CYAN}rea http start{Colors.RESET}                       launch the app and wait for its API
   {Colors.CYAN}rea http android --on{Colors.RESET}                point the ADB device at the proxy
-  {Colors.CYAN}rea scrcpy ...{Colors.RESET}                       drive the app while traffic is captured
+  {Colors.CYAN}rea device ...{Colors.RESET}                       drive the app while traffic is captured
   {Colors.CYAN}rea http watch{Colors.RESET}                       stream new exchanges as they arrive
   {Colors.CYAN}rea http events -f "hostname*=api"{Colors.RESET}   filter the captured log
   {Colors.CYAN}rea http show <id>{Colors.RESET}                   headers, status and timing

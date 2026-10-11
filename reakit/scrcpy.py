@@ -4,45 +4,16 @@ import subprocess
 from pathlib import Path
 from reakit.config import CORE_DIR
 from reakit.env import find_scrcpy_dir
-from reakit.utils import log_info, log_success, log_warn, log_error
+from reakit.utils import log_info, log_success, log_error
 
 class ScrcpyBridge:
+    """Desktop screen mirroring with the vendored scrcpy binary (rea mirror).
+
+    Device control moved to mobilerun-mcp (reakit/mobilerun.py, rea device).
+    """
+
     def __init__(self):
-        self.scrcpy_cli_dist = CORE_DIR / "scrcpy_cli" / "dist" / "index.js"
         self.scrcpy_dir = find_scrcpy_dir() or (CORE_DIR / "scrcpy_cli" / "vendor" / "scrcpy")
-
-    def run_cli(self, args: list[str]) -> int:
-        """Executes scrcpy_cli using Node.js."""
-        if not self.scrcpy_cli_dist.exists():
-            log_error(f"scrcpy_cli compiled distribution not found at {self.scrcpy_cli_dist}")
-            log_info("Try running: cd core/scrcpy_cli && npm install && npm run build")
-            return 1
-
-        node_path = shutil.which("node")
-        if not node_path:
-            log_error("Node.js is required to run scrcpy-cli but was not found in PATH.")
-            return 1
-
-        # Setup environment variables for scrcpy
-        env = os.environ.copy()
-        if self.scrcpy_dir.exists():
-            server_path = self.scrcpy_dir / "scrcpy-server"
-            if server_path.exists() and "SCRCPY_SERVER_PATH" not in env:
-                env["SCRCPY_SERVER_PATH"] = str(server_path.resolve())
-            if "SCRCPY_SERVER_VERSION" not in env:
-                env["SCRCPY_SERVER_VERSION"] = "4.1"
-
-            adb_path = self.scrcpy_dir / ("adb.exe" if os.name == "nt" else "adb")
-            if adb_path.exists() and "ADB_PATH" not in env:
-                env["ADB_PATH"] = str(adb_path.resolve())
-
-        cmd = [node_path, str(self.scrcpy_cli_dist.resolve())] + args
-        try:
-            res = subprocess.run(cmd, env=env)
-            return res.returncode
-        except Exception as e:
-            log_error(f"Error executing scrcpy-cli: {e}")
-            return 1
 
     def launch_mirror(
         self,
@@ -93,11 +64,3 @@ class ScrcpyBridge:
         except Exception as e:
             log_error(f"Failed to launch scrcpy: {e}")
             return 1
-
-def scrcpy_cli_main():
-    """Direct CLI entrypoint for standalone 'scrcpy-cli' command."""
-    import sys
-    from reakit.env import inject_runtime_path
-    inject_runtime_path()
-    bridge = ScrcpyBridge()
-    sys.exit(bridge.run_cli(sys.argv[1:]))

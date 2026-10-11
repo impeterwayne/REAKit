@@ -45,7 +45,7 @@ and hook scripts go under `findings/`, `docs/`, or `patches/`, which survive.
 
 Reach for the `rea` CLI before writing bespoke tooling — it already wraps the tools and the
 workspace conventions. The static pipeline is `rea init → download → decode`; native analysis
-is `rea native`; dynamic work is `rea scrcpy` / `rea pull` / `rea http` / `rea frida`. Each has a skill under
+is `rea native`; dynamic work is `rea device` / `rea pull` / `rea http` / `rea frida`. Each has a skill under
 `.agents/skills/`. Only write a custom script when no subcommand covers the step.
 
 ## 4. Report like an analyst

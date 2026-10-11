@@ -7,6 +7,25 @@ from reakit.utils import Colors, log_info, log_success, log_warn, log_error, log
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 CORE_DIR = BASE_DIR / "core"
+# mobilerun-mcp (device control backend for 'rea device') is a git submodule with
+# its own venv: it needs Python >=3.11,<3.14 and heavy deps (fastmcp, onnxruntime),
+# so ReaKit itself stays stdlib-only and only ever spawns that interpreter.
+MOBILERUN_DIR = CORE_DIR / "mobilerun_mcp"
+MOBILERUN_VENV = MOBILERUN_DIR / ".venv"
+MOBILERUN_PYTHON_VERSION = "3.13"
+
+
+def venv_python(venv: Path) -> Path:
+    """Path of the interpreter inside a venv (Scripts/python.exe on Windows, bin/python on POSIX)."""
+    if os.name == "nt":
+        return venv / "Scripts" / "python.exe"
+    return venv / "bin" / "python"
+
+
+def find_mobilerun_python() -> Path | None:
+    """The mobilerun-mcp venv interpreter, or None when 'rea install' has not created it."""
+    py = venv_python(MOBILERUN_VENV)
+    return py if py.is_file() else None
 
 def find_scrcpy_dir() -> Path | None:
     """Finds bundled scrcpy directory under core/scrcpy_cli/vendor/scrcpy or core/."""
@@ -48,7 +67,6 @@ def get_bundled_paths() -> dict[str, Path]:
     jadx_bin_dir = CORE_DIR / "jadx" / "bin"
     apkd_dir = (CORE_DIR / "apkdgo" / "bin") if (CORE_DIR / "apkdgo" / "bin").exists() else (CORE_DIR / "apkdgo")
     apktool_dir = CORE_DIR / "apktool"
-    scrcpy_cli_dist = CORE_DIR / "scrcpy_cli" / "dist"
 
     return {
         "root": BASE_DIR,
@@ -56,7 +74,7 @@ def get_bundled_paths() -> dict[str, Path]:
         "jadx": jadx_bin_dir,
         "apkd": apkd_dir,
         "apktool": apktool_dir,
-        "scrcpy_cli_dist": scrcpy_cli_dist,
+        "mobilerun": MOBILERUN_DIR,
     }
 
 def get_path_directories() -> list[Path]:
@@ -190,7 +208,7 @@ def check_environment() -> dict:
         except Exception:
             pass
     results["scrcpy"] = {
-        "name": "scrcpy Screen Mirroring",
+        "name": "scrcpy (mirror + adb)",
         "version": scrcpy_ver or "Unknown",
         "path": scrcpy_path or "Not found",
         "status": "ok" if scrcpy_path else "missing",
@@ -221,13 +239,8 @@ def check_environment() -> dict:
         "status": "ok" if apkd_path else "missing",
     }
 
-    # 8. scrcpy_cli module
-    scrcpy_cli_dist = CORE_DIR / "scrcpy_cli" / "dist" / "index.js"
-    results["scrcpy_cli"] = {
-        "name": "scrcpy-cli Module",
-        "path": str(scrcpy_cli_dist.resolve()) if scrcpy_cli_dist.exists() else "Not built",
-        "status": "ok" if scrcpy_cli_dist.exists() else "missing",
-    }
+    # 8. mobilerun-mcp venv - backend for 'rea device' (device control + MCP server)
+    results["mobilerun"] = check_mobilerun()
 
     # 9. Ghidra (backend for native .so analysis)
     # Imported lazily: reakit.native imports reakit.config, not reakit.env.
@@ -360,60 +373,102 @@ def print_environment_report():
         log_warn("No connected Android devices detected. Connect a physical device or launch an emulator.")
     print("")
 
-def install_scrcpy_cli() -> bool:
-    """Builds, bundles platform binaries, and globally links scrcpy-cli via npm link."""
+def check_mobilerun() -> dict:
+    """Doctor entry for the mobilerun-mcp venv: it exists and 'import mobilerun_mcp' works."""
+    info = {"name": "mobilerun-mcp (rea device)"}
+    if not (MOBILERUN_DIR / "pyproject.toml").is_file():
+        info.update(path="Submodule missing (git submodule update --init core/mobilerun_mcp)", status="missing")
+        return info
+    py = find_mobilerun_python()
+    if not py:
+        info.update(path="No venv (run: rea install)", status="missing")
+        return info
+    try:
+        res = subprocess.run(
+            [str(py), "-c", "import mobilerun_mcp, sys; print(sys.version.split()[0])"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=120,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        info.update(path=f"{py} ({exc})", status="missing")
+        return info
+    if res.returncode != 0:
+        info.update(path=f"{py} (import mobilerun_mcp failed - run: rea install)", status="missing")
+        return info
+    info.update(version=f"Python {res.stdout.strip()}", path=str(py), status="ok")
+    return info
+
+
+def install_mobilerun() -> bool:
+    """Creates core/mobilerun_mcp/.venv with uv and installs mobilerun-mcp into it (editable)."""
+    if not (MOBILERUN_DIR / "pyproject.toml").is_file():
+        log_warn("core/mobilerun_mcp is missing. Run: git submodule update --init core/mobilerun_mcp")
+        return False
+    uv = shutil.which("uv")
+    if not uv:
+        log_error("uv was not found in PATH; it is required to install mobilerun-mcp ('rea device').")
+        log_info("Install uv (https://docs.astral.sh/uv/getting-started/installation/), then re-run 'rea install'.")
+        return False
+
+    py = venv_python(MOBILERUN_VENV)
+    if not py.is_file():
+        log_info(f"[*] Creating mobilerun-mcp venv (Python {MOBILERUN_PYTHON_VERSION}) at {MOBILERUN_VENV}...")
+        res = subprocess.run(
+            [uv, "venv", "--python", MOBILERUN_PYTHON_VERSION, str(MOBILERUN_VENV)],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        if res.returncode != 0 or not py.is_file():
+            log_error(f"uv venv failed ({res.returncode}): {res.stderr.strip()}")
+            return False
+
+    log_info("[*] Installing mobilerun-mcp into its venv (uv pip install -e core/mobilerun_mcp)...")
+    res = subprocess.run(
+        [uv, "pip", "install", "--python", str(py), "-e", str(MOBILERUN_DIR)],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+    )
+    if res.returncode != 0:
+        log_error(f"uv pip install failed ({res.returncode}): {res.stderr.strip()[-2000:]}")
+        return False
+    log_success("mobilerun-mcp installed ('rea device' and 'rea device mcp' ready).")
+    return True
+
+
+def install_scrcpy_binaries() -> bool:
+    """Downloads the scrcpy + adb platform binaries into core/scrcpy_cli/vendor/scrcpy.
+
+    Only the binaries are used now ('rea mirror' and the shared ADB_PATH); the Node
+    scrcpy-cli itself is no longer built or linked. download-scrcpy.mjs only uses
+    Node built-ins, so no 'npm install' is needed - just node.
+    """
     scrcpy_cli_dir = CORE_DIR / "scrcpy_cli"
     if not scrcpy_cli_dir.exists():
         return False
 
-    npm_path = shutil.which("npm.cmd" if os.name == "nt" else "npm") or shutil.which("npm")
-    node_path = shutil.which("node")
-    if not npm_path:
-        log_warn("npm was not found in PATH. Skipping global scrcpy-cli linking.")
-        return False
-
-    # 1. Ensure scrcpy & adb binaries for the current OS are bundled in vendor/scrcpy
     vendor_scrcpy = scrcpy_cli_dir / "vendor" / "scrcpy"
     target_bin = vendor_scrcpy / ("scrcpy.exe" if os.name == "nt" else "scrcpy")
     target_adb = vendor_scrcpy / ("adb.exe" if os.name == "nt" else "adb")
     target_server = vendor_scrcpy / "scrcpy-server"
+    if target_bin.exists() and target_adb.exists() and target_server.exists():
+        return True
+
     download_script = scrcpy_cli_dir / "scripts" / "download-scrcpy.mjs"
-
-    if (not target_bin.exists() or not target_adb.exists() or not target_server.exists()) and download_script.exists() and node_path:
-        log_info("[*] Bundling scrcpy & adb platform binaries for current OS...")
-        try:
-            subprocess.run([node_path, str(download_script)], cwd=str(scrcpy_cli_dir), check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        except Exception as e:
-            log_warn(f"Failed to bundle scrcpy platform binaries: {e}")
-
-    node_modules = scrcpy_cli_dir / "node_modules"
-    if not node_modules.exists():
-        log_info("[*] Installing scrcpy-cli dependencies (npm install)...")
-        try:
-            subprocess.run([npm_path, "install"], cwd=str(scrcpy_cli_dir), check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        except Exception as e:
-            log_warn(f"Failed to install scrcpy-cli dependencies: {e}")
-
-    dist_file = scrcpy_cli_dir / "dist" / "index.js"
-    if not dist_file.exists():
-        log_info("[*] Building scrcpy-cli...")
-        try:
-            subprocess.run([npm_path, "run", "build"], cwd=str(scrcpy_cli_dir), check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        except Exception as e:
-            log_warn(f"Failed to build scrcpy-cli: {e}")
-
-    log_info("[*] Registering scrcpy-cli globally via npm link...")
-    try:
-        res = subprocess.run([npm_path, "link", "--force"], cwd=str(scrcpy_cli_dir), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        if res.returncode == 0:
-            log_success("Global 'scrcpy-cli' command registered successfully.")
-            return True
-        else:
-            log_warn(f"npm link exited with code {res.returncode}: {res.stderr.strip()}")
-            return False
-    except Exception as e:
-        log_warn(f"Failed to link scrcpy-cli globally: {e}")
+    node_path = shutil.which("node")
+    if not download_script.exists():
+        log_warn(f"scrcpy download script not found: {download_script}")
         return False
+    if not node_path:
+        log_warn("Node.js was not found in PATH. Skipping the scrcpy/adb binary download.")
+        return False
+
+    log_info("[*] Bundling scrcpy & adb platform binaries for current OS...")
+    try:
+        subprocess.run([node_path, str(download_script)], cwd=str(scrcpy_cli_dir), check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    except Exception as e:
+        log_warn(f"Failed to bundle scrcpy platform binaries: {e}")
+        return False
+    return target_bin.exists() and target_adb.exists()
 
 def install_pip_package() -> bool:
     """Installs REA_Kit Python package in editable mode via pip."""
@@ -513,7 +568,6 @@ def link_user_binaries():
     links = {
         "rea": BASE_DIR / "rea.py",
         "reakit": BASE_DIR / "rea.py",
-        "scrcpy-cli": CORE_DIR / "scrcpy_cli" / "dist" / "index.js",
         "jadx": CORE_DIR / "jadx" / "bin" / "jadx",
         "jadx-gui": CORE_DIR / "jadx" / "bin" / "jadx-gui",
         "apkd": CORE_DIR / "apkdgo" / "bin" / "apkd",
@@ -537,8 +591,13 @@ def install_environment(
     link_npm: bool = True,
     setup_ghidra: bool = True,
     skip_frida: bool = False,
+    setup_mobilerun: bool = True,
 ) -> list[str]:
-    """Complete REA_Kit installation: registers PATH, configures environment variables, links scrcpy-cli, bundles tools, builds apkd, and sets up Ghidra."""
+    """Complete REA_Kit installation: registers PATH, configures environment variables, bundles scrcpy/adb, installs mobilerun-mcp, builds apkd, and sets up Ghidra.
+
+    ``link_npm`` (CLI: --skip-npm turns it off) now only gates the Node-driven
+    scrcpy/adb binary download; the scrcpy-cli Node build/link is gone.
+    """
     # 0. Ensure POSIX permissions and build apkd if Go compiler exists
     fix_unix_permissions()
     build_apkd_linux()
@@ -547,9 +606,13 @@ def install_environment(
     dirs_to_add = get_path_directories()
     added_paths = []
 
-    # 1. Build and link scrcpy-cli globally & bundle scrcpy/adb binaries
+    # 1. Bundle scrcpy/adb binaries (rea mirror + the one shared adb)
     if link_npm:
-        install_scrcpy_cli()
+        install_scrcpy_binaries()
+
+    # 1b. mobilerun-mcp in its own venv (rea device / rea device mcp)
+    if setup_mobilerun:
+        install_mobilerun()
 
     # 2. Install REA_Kit Python package
     if install_pip:

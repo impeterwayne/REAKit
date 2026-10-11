@@ -23,7 +23,8 @@ REAKit bundles matching versions of **`scrcpy` (v4.1)**, **`adb`**, **`jadx`**, 
   brew install node openjdk@21 go maven
   ```
 * **Windows**:
-  * Ensure **Python 3.8+**, **Node.js 22+**, and **JDK 11+ / 21+** are installed and added to `PATH`.
+  * Ensure **Python 3.8+**, **Node.js 22+** (for fetching scrcpy/adb), and **JDK 11+ / 21+** are installed and added to `PATH`.
+  * For device control, also install [**`uv`**](https://docs.astral.sh/uv/) and a **Python 3.11–3.13** interpreter — `rea install` uses them to build the mobilerun device-automation venv.
 
 ---
 
@@ -45,8 +46,8 @@ install.bat
 
 The installer will automatically set up everything in a single step:
 1. Register `rea` and `reakit` into your Python environment.
-2. Build and link `scrcpy-cli` device automation globally.
-3. Automatically download matching **`scrcpy` & `adb` (v4.1)** native binaries for your OS.
+2. Build the **mobilerun** device-automation venv (Python 3.11–3.13, via `uv`) for `rea device`.
+3. Automatically download matching **`scrcpy` & `adb` (v4.1)** native binaries for your OS (`rea mirror` + the bundled adb).
 4. Compile the **`apkd`** APK downloader for your platform via Go.
 5. Fetch the official **Ghidra** distribution and build the **GhidraMCP** plugin jar & MCP bridge.
 6. Configure execution permissions (`chmod +x`) on all bundled tools.
@@ -92,7 +93,7 @@ flowchart TD
 
     subgraph Dynamic ["Dynamic Analysis Loop"]
         direction TB
-        S4["<b>4. rea scrcpy</b><br/><i>Device Control & UI Automation</i>"]
+        S4["<b>4. rea device</b><br/><i>Device Control & UI Automation (mobilerun)</i>"]
         S5["<b>5. rea pull</b><br/><i>ADB Sandbox Runtime Extraction</i>"]
         S6["<b>6. rea http</b><br/><i>HTTP Toolkit proxy + API traffic log</i>"]
         S7["<b>7. rea frida</b><br/><i>Frida instrumentation: hooks, RPC, memory</i>"]
@@ -125,7 +126,7 @@ flowchart TD
 
 REAKit ships a drop-in **reverse-engineering agent harness** for Google Antigravity — a
 self-contained `.agents/` payload of always-on rules, 7 specialist agents, 15 domain skills, and
-5 deterministic safety hooks, injected into any engagement repo with `rea harness`. It follows the
+4 deterministic safety hooks, injected into any engagement repo with `rea harness`. It follows the
 AndroidHarnessAGY standard, retargeted from building apps to reversing them: the agents delegate,
 cite evidence for every claim, and never hand-edit generated decompilation.
 
@@ -143,7 +144,7 @@ Profiles: `full` (default), `static`, `native`, `dynamic`, `minimal`. Full detai
 ## Documentation Index
 
 1. **[CLI Reference Manual](./docs/cli_reference.md)** - Comprehensive manual for the `rea` CLI and all its subcommands.
-2. **[Device Control & Automation Guide](./docs/scrcpy_control.md)** - Low-latency scrcpy daemon control and automation actions.
+2. **[Device Control & Automation Guide](./docs/device_control.md)** - Driving a device with the mobilerun MCP server and the `rea device` CLI.
 3. **[Workspace Setup & Management Guide](./docs/workspace_management.md)** - Directory schemas and target workspace management.
 4. **[Target Downloading Guide](./docs/downloading_targets.md)** - Automated APK downloading via `apkd`.
 5. **[Bytecode Decompilation & JADX Guide](./docs/decompilation.md)** - JADX memory safeguards, split APK merging, and decompilation.
@@ -161,7 +162,8 @@ Profiles: `full` (default), `static`, `native`, `dynamic`, `minimal`. Full detai
 To run all capabilities of `REA_Kit`, ensure the following are installed:
 
 * **Python 3.8+** (runs the `reakit` engine).
-* **Node.js 22+** (required for `scrcpy-cli` device automation).
+* **Node.js 22+** (for fetching the bundled `scrcpy` / `adb` binaries).
+* **`uv` + Python 3.11–3.13** (optional, only for `rea device` — builds the mobilerun device-automation venv; the device also needs the Mobilerun Portal APK, installed by `rea device setup`).
 * **Java Development Kit (JDK) 11+** (required for `JADX` decompiler and `APKTool`; **JDK 21** for native analysis with Ghidra).
 * **Go (Golang)** (required to build the `apkd` APK downloader).
 * **A Connected Device or Emulator** (physical device, Genymotion, or Android Studio AVD).

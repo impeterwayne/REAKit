@@ -52,23 +52,5 @@
         "timeout": 20
       }
     ]
-  },
-  "device-daemon": {
-    "_comment": "Owns the scrcpy-cli daemon so the agent never runs `daemon start`/`daemon stop` itself -- the device-control, runtime-extraction and traffic-capture skills just issue actions. Brings the daemon up on the first LLM call of a conversation (ALWAYS_START=True in scrcpy_daemon.py; set it False to start only when the transcript shows device work per SIGNALS -- rea scrcpy|mirror|pull|runtime, ui-dump, uiautomator, or an activated dynamic-analysis skill). Idempotent via a per-conversationId marker, so the ~50 PreInvocations in a session cost one marker check each. A 60s negative cache avoids re-probing when no device is attached. Stop is refcounted by conversationId so a finishing subagent cannot kill a daemon its parent is still using, and a daemon started by hand is never stopped. PreInvocation/Stop only -- a PreToolUse hook on run_command would have to return a decision for every shell command. Requires `scrcpy-cli` on PATH (installed globally by ReaKit's installer). Verified: 14/14 signal fixtures.",
-    "enabled": true,
-    "PreInvocation": [
-      {
-        "type": "command",
-        "command": "python hooks/scrcpy_daemon.py preinvocation",
-        "timeout": 10
-      }
-    ],
-    "Stop": [
-      {
-        "type": "command",
-        "command": "python hooks/scrcpy_daemon.py stop",
-        "timeout": 20
-      }
-    ]
   }
 }

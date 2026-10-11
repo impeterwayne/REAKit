@@ -82,8 +82,9 @@ Loaded into every session as continuous context.
 - **`reverse.md`** — evidence over inference. Every claim cites a file:line, an address, or a
   captured exchange; prefer the lowest layer that settles it; confirm dynamically when you can.
   Documents the workspace layout and which dirs are generated (off-limits to hand edits).
-- **`dynamic.md`** — device and traffic hygiene: confirm a device, let the daemon hook manage
-  `scrcpy-cli`, wire the proxy/CA, and correlate on-wire values back to the code that built them.
+- **`dynamic.md`** — device and traffic hygiene: confirm a device, drive it through the
+  `mobilerun` MCP server (or `rea device` for saved captures), wire the proxy/CA, and correlate
+  on-wire values back to the code that built them.
 ### 2. Agents — specialized personas (`agents/`)
 
 | Agent | Role |
@@ -94,7 +95,7 @@ Loaded into every session as continuous context.
 | `native-analyst` | Drives `rea native` + Ghidra: decompile, trace, name JNI routines. |
 | `traffic-analyst` | Drives `rea http`: correlate requests to the code that signs them. |
 | `frida-analyst` | Drives `rea frida`: hook Java/native at runtime, call the app's own functions over RPC, confirm a static hypothesis. |
-| `business-analyst` | Drives `rea scrcpy`: screenshots each state and writes a functional spec of a flow, dispatching `screen-analyst` for what the UI dump misses, `explore` for code-binding, and `oracle` for coverage planning on branchy flows. |
+| `business-analyst` | Drives the device with the `mobilerun` MCP tools (`rea device` for saved captures): screenshots each state and writes a functional spec of a flow, dispatching `screen-analyst` for what the accessibility dump misses, `explore` for code-binding, and `oracle` for coverage planning on branchy flows. |
 | `screen-analyst` | Reads a captured screenshot against its UI dump: custom-drawn views, WebView content, icon-only controls, visual state the dump doesn't carry. |
 | `worker-quick` | Trivial single-file artifact (a Frida snippet, a small helper). No shell. |
 | `worker-deep` | Autonomous multi-step tooling — an end-to-end deobfuscator, a device-verified hook. |
@@ -120,20 +121,25 @@ Antigravity runs these Python hooks so safety and orchestration cost no LLM toke
 | `root-write-guard` (`write_guard.py`) | PreToolUse | Enforces the delegation rule: the root session cannot write script/code artifacts (`.py .js .java .smali .c …`); those go through workers. Prose (`.md`) is always allowed. |
 | `ultrawork-intent-gate` (`intent_gate.py`) | PreInvocation | Turns the word `ultrawork` in a prompt into an injected rigour directive. |
 | `stop-verifier` (`stop_verifier.py`) | Stop | Holds a registered goal loop open until its goals hold, validating recorded evidence (never re-running the work). |
-| `device-daemon` (`scrcpy_daemon.py`) | PreInvocation / Stop | Owns the `scrcpy-cli` daemon lifecycle (refcounted across sessions) so agents never start/stop it by hand. |
 
 Each hook fails open, self-tests (`python .agents/hooks/<hook>.py --self-test`), and has an
 off-switch (`--off` / `--on` / `--status`). Runtime state lives under `.agents/state/`
 (gitignored).
 
-### No MCP server
+### MCP registration
 
-The harness deliberately ships **no `mcp_config.json`**. Every backend — Ghidra and HTTP
-Toolkit alike — is driven through the `rea` CLI, and the skills read its stdout. That is the whole
-point: a registered MCP server would load its tool schemas into every agent turn and bloat
-context, while `rea native …` / `rea http …` cost nothing until called. If an MCP-native client
-outside the harness wants a direct bridge, `rea native mcp` and `rea http mcp` still exist as
-`rea` subcommands, backed by a live server you start yourself.
+The harness registers **one** MCP server: `mobilerun`, the device-automation backend
+(`core/mobilerun_mcp`), in `.agents/mcp_config.json` (and `.mcp.json` for Claude Code). Device
+control is the one place an interactive observe → act → verify loop beats shelling out, so agents
+drive the phone through its tools; `rea device mcp --config` prints the same configuration for any
+other client.
+
+Every other backend — Ghidra, HTTP Toolkit, Frida — is still driven through the `rea` CLI, and the
+skills read its stdout. A registered MCP server loads its tool schemas into every agent turn and
+bloats context, while `rea native …` / `rea http …` / `rea frida …` cost nothing until called. If
+an MCP-native client outside the harness wants a direct bridge to those, `rea native mcp`,
+`rea http mcp`, and `rea frida mcp` still exist as `rea` subcommands, backed by a live server you
+start yourself.
 
 ---
 
