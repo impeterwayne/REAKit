@@ -61,6 +61,21 @@ from reakit.httptoolkit import (
     watch_events,
 )
 from reakit import httptoolkit as htk_mod
+from reakit.fridakit import (
+    AdbHelper,
+    FridaDevice,
+    FridaError,
+    FridaNotRunning,
+    FridaServerManager,
+    SessionManager,
+    TargetSpec,
+    print_applications,
+    print_devices,
+    print_processes,
+    print_server_status,
+    run_probe,
+)
+from reakit import fridakit as frida_mod
 import os
 
 def _add_target_args(parser: argparse.ArgumentParser, positional_help: str = "Target package name or alias"):
@@ -346,6 +361,148 @@ def _add_http_parser(subparsers):
     return http_p
 
 
+def _add_frida_serial(parser: argparse.ArgumentParser):
+    """Adds the device-selection flags (-s/--serial, --port) shared by frida commands."""
+    parser.add_argument("-s", "--serial", help="Target device serial (adb -s)")
+    parser.add_argument(
+        "--port",
+        type=int,
+        help=f"Forwarded frida-server port (default {frida_mod.DEFAULT_FRIDA_PORT})",
+    )
+
+
+def _add_frida_target_spec(parser: argparse.ArgumentParser, positional: bool = True):
+    """Adds the frida process selector flags, mirroring frida CLI -p/-n/-N/-F."""
+    if positional:
+        parser.add_argument(
+            "frida_target",
+            nargs="?",
+            help="Target: package/alias, process name, or pid (defaults to the sole workspace)",
+        )
+    parser.add_argument("-p", "--pid", type=int, help="Select the target by pid")
+    parser.add_argument("-n", "--name", help="Select the target by process name")
+    parser.add_argument("-N", "--identifier", help="Select the target by application identifier")
+    parser.add_argument("-F", "--frontmost", action="store_true", help="Select the frontmost application")
+    _add_frida_serial(parser)
+
+
+def _add_frida_parser(subparsers):
+    """Registers 'rea frida' - frida-server lifecycle plus dynamic instrumentation."""
+    frida_p = subparsers.add_parser(
+        "frida",
+        aliases=["fr", "instrument"],
+        help="Drive Frida: frida-server lifecycle, probes, RPC, memory and injection",
+    )
+    frida_sub = frida_p.add_subparsers(dest="frida_action", help="Frida actions")
+
+    agent_choices = [a[:-3] if a.endswith(".js") else a for a in frida_mod.BUILTIN_AGENTS]
+
+    # --- one-shot setup: install + start the server ---
+    setup_p = frida_sub.add_parser("setup", help="Install a version-matched frida-server and start it")
+    setup_p.add_argument("--version", help="frida version/track (e.g. 16, 16.7.19, host); default 16")
+    setup_p.add_argument("--force", action="store_true", help="Re-push the server even if already installed")
+    _add_frida_serial(setup_p)
+
+    # --- doctor ---
+    doc_p = frida_sub.add_parser("doctor", help="Check every Frida prerequisite (host module, adb, server, root)")
+    doc_p.add_argument("-s", "--serial", help="Target device serial (adb -s)")
+
+    # --- frida-server lifecycle ---
+    srv_p = frida_sub.add_parser("server", help="Manage the on-device frida-server")
+    srv_sub = srv_p.add_subparsers(dest="server_action", help="frida-server actions")
+    st_p = srv_sub.add_parser("status", help="Show liveness and the host/device version match")
+    st_p.add_argument("-s", "--serial", help="Target device serial (adb -s)")
+    sta_p = srv_sub.add_parser("start", help="Start frida-server (detached) on the device")
+    sta_p.add_argument("-s", "--serial", help="Target device serial (adb -s)")
+    sto_p = srv_sub.add_parser("stop", help="Stop frida-server on the device")
+    sto_p.add_argument("-s", "--serial", help="Target device serial (adb -s)")
+    ins_p = srv_sub.add_parser("install", help="Download + push frida-server to the device")
+    ins_p.add_argument("--version", help="frida version/track (e.g. 16, 16.7.19, host); default 16")
+    ins_p.add_argument("--force", action="store_true", help="Re-push the server even if already installed")
+    ins_p.add_argument("-s", "--serial", help="Target device serial (adb -s)")
+
+    # --- list frida devices ---
+    frida_sub.add_parser("ls", help="List Frida devices")
+
+    # --- processes / applications ---
+    ps_p = frida_sub.add_parser("ps", help="List running processes (or applications with --apps)")
+    ps_p.add_argument("--apps", action="store_true", help="List installed applications instead of processes")
+    ps_p.add_argument("--running", action="store_true", help="With --apps, only show running applications")
+    ps_p.add_argument("--json", action="store_true", help="Print the raw JSON")
+    _add_frida_serial(ps_p)
+
+    # --- probe (spawn/attach + stream a bundled or on-disk agent) ---
+    pr_p = frida_sub.add_parser("probe", help="Inject a probe agent and stream its messages")
+    pr_p.add_argument("frida_target", nargs="?", help="Target package/alias (defaults to the sole workspace)")
+    pr_p.add_argument("--script", choices=agent_choices, help="A bundled agent name")
+    pr_p.add_argument("--file", help="Path to an on-disk .js agent (instead of --script)")
+    pr_p.add_argument("--spawn", action="store_true", help="Spawn the target instead of attaching")
+    pr_p.add_argument("--duration", "-d", type=float, default=60.0, help="Seconds to stay resident (default 60)")
+    pr_p.add_argument("--runtime", choices=["qjs", "v8"], help="Script runtime (default: frida's own)")
+    _add_frida_serial(pr_p)
+
+    # --- spawn a program ---
+    sp_p = frida_sub.add_parser("spawn", help="Spawn a program under Frida")
+    sp_p.add_argument("program", help="Package identifier or program path to spawn")
+    sp_p.add_argument("--no-resume", action="store_true", help="Leave the spawned process paused")
+    sp_p.add_argument("--argv", nargs="*", help="Arguments to pass to the spawned program")
+    _add_frida_serial(sp_p)
+
+    # --- attach ---
+    at_p = frida_sub.add_parser("attach", help="Attach to a running process")
+    _add_frida_target_spec(at_p)
+
+    # --- rpc ---
+    rpc_p = frida_sub.add_parser("rpc", help="Load a script and call its rpc.exports")
+    _add_frida_target_spec(rpc_p)
+    rpc_p.add_argument("--file", required=True, help="Path to the rpc script (.js)")
+    rpc_mode = rpc_p.add_mutually_exclusive_group()
+    rpc_mode.add_argument("--call", nargs="+", metavar=("METHOD", "ARG"), help="Call METHOD with optional args")
+    rpc_mode.add_argument("--repl", action="store_true", help="Interactive rpc prompt")
+    rpc_mode.add_argument("--http", type=int, metavar="PORT", help="Serve rpc over HTTP on 127.0.0.1:PORT")
+    rpc_p.add_argument("--runtime", choices=["qjs", "v8"], help="Script runtime (default: frida's own)")
+
+    # --- memory ---
+    mem_p = frida_sub.add_parser("mem", help="Read/write/scan/protect process memory")
+    mem_sub = mem_p.add_subparsers(dest="mem_action", help="Memory actions")
+    for mem_name, mem_help in (
+        ("read", "Read bytes at an address"),
+        ("write", "Write hex bytes at an address"),
+        ("scan", "Scan a range for a byte pattern"),
+        ("protect", "Change page protection"),
+    ):
+        m = mem_sub.add_parser(mem_name, help=mem_help)
+        _add_frida_target_spec(m)
+        m.add_argument("--address", help="Address, e.g. 0x7f00... (required)")
+        m.add_argument("--size", type=int, help="Byte count (read/scan/protect)")
+        m.add_argument("--hex", help="Hex bytes to write")
+        m.add_argument("--pattern", help="Scan pattern, e.g. '41 42 ?? 44'")
+        m.add_argument("--prot", default="rwx", help="Protection for protect (default rwx)")
+
+    # --- native library injection ---
+    il_p = frida_sub.add_parser("inject-lib", help="Inject a native library into a process")
+    _add_frida_target_spec(il_p)
+    il_src = il_p.add_mutually_exclusive_group(required=True)
+    il_src.add_argument("--path", help="Path to a .so on the host")
+    il_src.add_argument("--blob", help="Base64-encoded library blob")
+    il_p.add_argument("--entrypoint", help="Entrypoint symbol in the library (required)")
+    il_p.add_argument("--data", default="", help="Data string passed to the entrypoint")
+
+    # --- spawn / child gating ---
+    g_p = frida_sub.add_parser("gating", help="Enable/disable spawn (or child) gating")
+    g_sub = g_p.add_subparsers(dest="gating_action", help="Gating actions")
+    for g_name, g_help in (("enable", "Enable gating"), ("disable", "Disable gating")):
+        gp = g_sub.add_parser(g_name, help=g_help)
+        _add_frida_target_spec(gp)
+        gp.add_argument("--child", action="store_true", help="Child gating on a session instead of device spawn gating")
+
+    # --- MCP bridge for AI clients ---
+    mcp_p = frida_sub.add_parser("mcp", help="Run a Frida MCP bridge (for AI clients)")
+    mcp_p.add_argument("--config", dest="frida_mcp_config", action="store_true", help="Print MCP client configuration and exit")
+
+    return frida_p
+
+
 def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="rea",
@@ -411,6 +568,9 @@ def create_parser() -> argparse.ArgumentParser:
     # 5c. http / htk - HTTP Toolkit proxy, traffic log and MCP bridge
     _add_http_parser(subparsers)
 
+    # 5d. frida / fr - frida-server lifecycle and dynamic instrumentation
+    _add_frida_parser(subparsers)
+
     # 6. scrcpy / control
     scrcpy_p = subparsers.add_parser("scrcpy", aliases=["control"], help="Android device automation via scrcpy-cli")
     scrcpy_p.add_argument("scrcpy_args", nargs=argparse.REMAINDER, help="Arguments passed directly to scrcpy-cli")
@@ -461,6 +621,7 @@ def create_parser() -> argparse.ArgumentParser:
     sp_p.add_argument("--skip-pip", action="store_true", help="Skip editable Python package installation (pip install -e .)")
     sp_p.add_argument("--skip-npm", action="store_true", help="Skip scrcpy-cli global linking (npm link)")
     sp_p.add_argument("--skip-ghidra", action="store_true", help="Skip automatic Ghidra download and GhidraMCP build")
+    sp_p.add_argument("--skip-frida", action="store_true", help="Skip the optional host-side Frida package install hint/check")
 
     # 13. harness - inject / manage the .agents/ agent harness in a target repo
     from reakit.harness import add_harness_parser
@@ -1022,6 +1183,325 @@ def _run_http(args, config_mgr) -> int:
     return 2
 
 
+def _resolve_frida_target(args, config_mgr) -> "str | None":
+    """Resolves a frida command's target, defaulting to the sole workspace / first target."""
+    target = getattr(args, "frida_target", None)
+    if target:
+        return target
+    return _resolve_native_target(args, config_mgr)
+
+
+def _frida_target_spec(args, config_mgr) -> TargetSpec:
+    """Builds a TargetSpec from -p/-n/-N/-F, defaulting to the configured target."""
+    pid = getattr(args, "pid", None)
+    name = getattr(args, "name", None)
+    identifier = getattr(args, "identifier", None)
+    frontmost = getattr(args, "frontmost", False)
+    default = None
+    if pid is None and not name and not identifier and not frontmost:
+        default = _resolve_frida_target(args, config_mgr)
+    return TargetSpec.from_args(
+        pid=pid, name=name, identifier=identifier, frontmost=frontmost, default=default
+    )
+
+
+def _frida_device(args, config_mgr) -> FridaDevice:
+    """Creates the default remote FridaDevice honouring -s/--serial and --port."""
+    return FridaDevice.create(
+        config_mgr,
+        serial=getattr(args, "serial", None),
+        port=getattr(args, "port", None),
+    )
+
+
+def _run_frida(args, config_mgr) -> int:
+    """Dispatches 'rea frida <action>'."""
+    action = getattr(args, "frida_action", None)
+    if not action:
+        frida_mod.print_frida_setup_help()
+        return 2
+
+    try:
+        # ---------- device-less actions ----------
+        if action == "doctor":
+            return frida_mod.doctor(config_mgr, serial=getattr(args, "serial", None))
+
+        if action == "setup":
+            mgr = FridaServerManager(AdbHelper(getattr(args, "serial", None)), config_mgr)
+            if not mgr.install(version=args.version, force=args.force):
+                return 1
+            return 0 if mgr.start() else 1
+
+        if action == "server":
+            sub = getattr(args, "server_action", None)
+            mgr = FridaServerManager(AdbHelper(getattr(args, "serial", None)), config_mgr)
+            if sub == "status":
+                return print_server_status(mgr.status())
+            if sub == "start":
+                return 0 if mgr.start() else 1
+            if sub == "stop":
+                return 0 if mgr.stop() else 1
+            if sub == "install":
+                return 0 if mgr.install(version=args.version, force=args.force) else 1
+            log_error("A server subcommand is required (status|start|stop|install).")
+            return 2
+
+        if action == "mcp":
+            if getattr(args, "frida_mcp_config", False):
+                return frida_mod.print_mcp_config(config_mgr)
+            return frida_mod.run_mcp_bridge(config_mgr)
+
+        if action == "ls":
+            frida = frida_mod.require_frida()
+            return print_devices(frida.enumerate_devices())
+
+        if action == "probe":
+            target = _resolve_frida_target(args, config_mgr)
+            script = args.file or args.script
+            if not script:
+                log_error("probe needs --script NAME or --file PATH.")
+                return 1
+            return run_probe(
+                config_mgr,
+                target,
+                script,
+                spawn=args.spawn,
+                duration=args.duration,
+                runtime=args.runtime,
+                serial=getattr(args, "serial", None),
+                port=getattr(args, "port", None),
+            )
+
+        # ---------- device-backed actions ----------
+        device = _frida_device(args, config_mgr)
+        sm: "SessionManager | None" = None
+        try:
+            if action == "ps":
+                if args.apps:
+                    apps = device.enumerate_applications()
+                    if args.json:
+                        return _dump_json([
+                            {"pid": getattr(a, "pid", 0), "identifier": getattr(a, "identifier", ""),
+                             "name": getattr(a, "name", "")}
+                            for a in apps
+                        ])
+                    return print_applications(apps, running_only=args.running)
+                procs = device.enumerate_processes()
+                if args.json:
+                    return _dump_json([
+                        {"pid": getattr(p, "pid", 0), "name": getattr(p, "name", "")}
+                        for p in procs
+                    ])
+                return print_processes(procs)
+
+            if action == "spawn":
+                sm = SessionManager(device)
+                pid, _session = sm.spawn_and_attach(
+                    args.program, argv=args.argv, auto_resume=not args.no_resume
+                )
+                state = "paused" if args.no_resume else "running"
+                log_success(f"Spawned {args.program} pid={pid} ({state}).")
+                return 0
+
+            if action == "attach":
+                sm = SessionManager(device)
+                spec = _frida_target_spec(args, config_mgr)
+                pid, _session = sm.attach(spec)
+                log_success(f"Attached to {spec} pid={pid}.")
+                return 0
+
+            if action == "rpc":
+                sm = SessionManager(device)
+                spec = _frida_target_spec(args, config_mgr)
+                pid, _session = sm.attach(spec)
+                source = Path(args.file).read_text(encoding="utf-8")
+                sid = sm.inject(pid, source, runtime=args.runtime)
+                log_success(f"Loaded {args.file} into pid={pid} as {sid}.")
+
+                if args.call:
+                    method = args.call[0]
+                    call_args = []
+                    for tok in args.call[1:]:
+                        try:
+                            call_args.append(json.loads(tok))
+                        except json.JSONDecodeError:
+                            call_args.append(tok)
+                    result = sm.rpc_call(sid, method, call_args)
+                    return _dump_json(result)
+
+                if args.http is not None:
+                    return _frida_rpc_http(sm, sid, args.http)
+
+                if args.repl:
+                    return _frida_rpc_repl(sm, sid)
+
+                exports = sm.list_exports(sid)
+                log_info("rpc exports: " + (", ".join(exports) or "(none)"))
+                log_dim("Use --call METHOD [ARG...], --repl, or --http PORT.")
+                return 0
+
+            if action == "mem":
+                return _run_frida_mem(args, config_mgr, device)
+
+            if action == "inject-lib":
+                if not args.entrypoint:
+                    log_error("inject-lib needs --entrypoint SYMBOL.")
+                    return 1
+                spec = _frida_target_spec(args, config_mgr)
+                pid = spec.resolve(device)
+                if args.path:
+                    inj = device.inject_library_file(pid, args.path, args.entrypoint, args.data or "")
+                else:
+                    import base64
+                    blob = base64.b64decode(args.blob)
+                    inj = device.inject_library_blob(pid, blob, args.entrypoint, args.data or "")
+                log_success(f"Injected library into pid={pid} (injection id {inj}).")
+                return 0
+
+            if action == "gating":
+                sub = getattr(args, "gating_action", None)
+                if sub not in ("enable", "disable"):
+                    log_error("A gating subcommand is required (enable|disable).")
+                    return 2
+                if args.child:
+                    sm = SessionManager(device)
+                    spec = _frida_target_spec(args, config_mgr)
+                    pid, _session = sm.attach(spec)
+                    if sub == "enable":
+                        sm.enable_child_gating(pid)
+                    else:
+                        sm.disable_child_gating(pid)
+                    log_success(f"Child gating {sub}d on pid={pid}.")
+                else:
+                    if sub == "enable":
+                        device.enable_spawn_gating()
+                    else:
+                        device.disable_spawn_gating()
+                    log_success(f"Spawn gating {sub}d on {device.id}.")
+                return 0
+
+            log_error("Unknown frida subcommand")
+            return 2
+        finally:
+            if sm is not None:
+                sm.cleanup()
+            device.close()
+
+    except (frida_mod.FridaError, frida_mod.FridaNotRunning) as exc:
+        log_error(str(exc))
+        return 1
+
+
+def _run_frida_mem(args, config_mgr, device) -> int:
+    """Handles 'rea frida mem read|write|scan|protect'."""
+    sub = getattr(args, "mem_action", None)
+    if sub not in ("read", "write", "scan", "protect"):
+        log_error("A mem subcommand is required (read|write|scan|protect).")
+        return 2
+    if not args.address:
+        log_error("mem needs --address.")
+        return 1
+
+    sm = SessionManager(device)
+    try:
+        spec = _frida_target_spec(args, config_mgr)
+        pid, _session = sm.attach(spec)
+
+        if sub == "read":
+            if args.size is None:
+                log_error("mem read needs --size.")
+                return 1
+            print(sm.mem_read(pid, args.address, args.size))
+            return 0
+        if sub == "write":
+            if not args.hex:
+                log_error("mem write needs --hex.")
+                return 1
+            written = sm.mem_write(pid, args.address, args.hex)
+            log_success(f"Wrote {written} byte(s) at {args.address}.")
+            return 0
+        if sub == "scan":
+            if args.size is None or not args.pattern:
+                log_error("mem scan needs --size and --pattern.")
+                return 1
+            return _dump_json(sm.mem_scan(pid, args.address, args.size, args.pattern))
+        # protect
+        if args.size is None:
+            log_error("mem protect needs --size.")
+            return 1
+        ok = sm.mem_protect(pid, args.address, args.size, args.prot)
+        log_success(f"Protection {args.prot} applied at {args.address} ({'ok' if ok else 'failed'}).")
+        return 0 if ok else 1
+    finally:
+        sm.cleanup()
+
+
+def _frida_rpc_repl(sm, sid) -> int:
+    """A minimal interactive rpc prompt: '<method> [json-arg ...]'."""
+    exports = sm.list_exports(sid)
+    log_info("rpc repl - type: <method> [json-arg ...]   (quit/exit or Ctrl-D to stop)")
+    log_dim("exports: " + (", ".join(exports) or "(none)"))
+    while True:
+        try:
+            line = input("rpc> ").strip()
+        except EOFError:
+            print("")
+            break
+        if not line:
+            continue
+        if line in ("quit", "exit"):
+            break
+        parts = line.split()
+        method, call_args = parts[0], []
+        for tok in parts[1:]:
+            try:
+                call_args.append(json.loads(tok))
+            except json.JSONDecodeError:
+                call_args.append(tok)
+        try:
+            result = sm.rpc_call(sid, method, call_args)
+            print(json.dumps(result, indent=2, default=str))
+        except FridaError as exc:
+            log_error(str(exc))
+    return 0
+
+
+def _frida_rpc_http(sm, sid, port: int) -> int:
+    """Serves the script's rpc.exports over a tiny local HTTP bridge (POST /rpc)."""
+    import http.server
+    import socketserver
+
+    class _Handler(http.server.BaseHTTPRequestHandler):
+        def do_POST(self):  # noqa: N802 - http.server API
+            length = int(self.headers.get("Content-Length", 0) or 0)
+            try:
+                body = json.loads(self.rfile.read(length) or b"{}")
+                result = sm.rpc_call(sid, body.get("method"), body.get("args", []))
+                payload, code = {"result": result}, 200
+            except FridaError as exc:
+                payload, code = {"error": str(exc)}, 500
+            except (ValueError, json.JSONDecodeError) as exc:
+                payload, code = {"error": f"bad request: {exc}"}, 400
+            data = json.dumps(payload, default=str).encode("utf-8")
+            self.send_response(code)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+        def log_message(self, *_args):  # silence per-request logging
+            pass
+
+    with socketserver.TCPServer(("127.0.0.1", port), _Handler) as httpd:
+        log_success(f"rpc HTTP bridge on http://127.0.0.1:{port}  (POST /rpc {{\"method\":..,\"args\":[..]}})")
+        log_dim("Ctrl-C to stop.")
+        try:
+            httpd.serve_forever()
+        except KeyboardInterrupt:
+            print("")
+    return 0
+
+
 def main():
     inject_runtime_path()
     parser = create_parser()
@@ -1147,6 +1627,9 @@ def main():
     elif cmd in ("http", "htk", "traffic"):
         sys.exit(_run_http(args, config_mgr))
 
+    elif cmd in ("frida", "fr", "instrument"):
+        sys.exit(_run_frida(args, config_mgr))
+
     elif cmd in ("scrcpy", "control"):
         bridge = ScrcpyBridge()
         scrcpy_args = getattr(args, "scrcpy_args", [])
@@ -1248,6 +1731,7 @@ def main():
                 install_pip=not getattr(args, "skip_pip", False),
                 link_npm=not getattr(args, "skip_npm", False),
                 setup_ghidra=not getattr(args, "skip_ghidra", False),
+                skip_frida=getattr(args, "skip_frida", False),
             )
             if added:
                 log_success("Configured PATH for REA_Kit tools:")

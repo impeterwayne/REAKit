@@ -6,6 +6,7 @@
     "docs": "docs",
     "native": "native",
     "traffic": "traffic",
+    "frida": "dynamic/frida",
     "runtime": {
       "base": "runtime",
       "internal": "runtime/internal",
@@ -36,5 +37,8 @@
   ],
   "ghidraHome": "core/ghidra/ghidra_12.1.3_PUBLIC",
   "ghidraGuiPort": 8089,
-  "ghidraHeadlessPort": 8192
+  "ghidraHeadlessPort": 8192,
+  "fridaServerPort": 27042,
+  "fridaVersion": "17",
+  "fridaServerName": "frida-server"
 }

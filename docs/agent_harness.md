@@ -62,10 +62,10 @@ is how `update` knows which files you changed and `status` knows what drifted.
 
 | Profile | Skills | Agents | Rules | Use case |
 | :--- | :---: | :---: | :---: | :--- |
-| **`full`** *(default)* | 14 | 9 | 3 | Everything — static + native + dynamic + rigour |
+| **`full`** *(default)* | 15 | 10 | 3 | Everything — static + native + dynamic + rigour |
 | **`static`** | 10 | 6 | 2 | Bytecode + native static analysis (download, decode, `.so`, deobfuscation) |
 | **`native`** | 8 | 6 | 2 | Focused `.so` / JNI reversing with Ghidra |
-| **`dynamic`** | 9 | 8 | 3 | Device-driven work: control, runtime extraction, traffic capture, protocol |
+| **`dynamic`** | 10 | 9 | 3 | Device-driven work: control, runtime extraction, traffic capture, protocol, instrumentation |
 | **`minimal`** | 4 | 5 | 1 | Rigour mode, finding review, and goal loops only |
 
 ---
@@ -93,6 +93,7 @@ Loaded into every session as continuous context.
 | `oracle` | Read-only strategist — deobfuscation approach, crypto/protocol ID, review of a finding. |
 | `native-analyst` | Drives `rea native` + Ghidra: decompile, trace, name JNI routines. |
 | `traffic-analyst` | Drives `rea http`: correlate requests to the code that signs them. |
+| `frida-analyst` | Drives `rea frida`: hook Java/native at runtime, call the app's own functions over RPC, confirm a static hypothesis. |
 | `business-analyst` | Drives `rea scrcpy`: screenshots each state and writes a functional spec of a flow, dispatching `screen-analyst` for what the UI dump misses, `explore` for code-binding, and `oracle` for coverage planning on branchy flows. |
 | `screen-analyst` | Reads a captured screenshot against its UI dump: custom-drawn views, WebView content, icon-only controls, visual state the dump doesn't carry. |
 | `worker-quick` | Trivial single-file artifact (a Frida snippet, a small helper). No shell. |
@@ -102,7 +103,7 @@ Loaded into every session as continuous context.
 
 **Tool wrappers** (map each to its `rea` subcommand): `workspace-setup`, `apk-acquisition`,
 `decompilation`, `static-pipeline`, `native-analysis`, `runtime-extraction`, `device-control`,
-`traffic-capture`.
+`traffic-capture`, `dynamic-instrumentation`.
 
 **Methodology**: `jni-reversing`, `deobfuscation`, `protocol-reversing`, `finding-review`.
 

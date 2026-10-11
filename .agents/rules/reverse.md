@@ -34,9 +34,10 @@ Know where things are and where new things go:
 | `native/` | extracted `.so` + Ghidra exports | `rea native` |
 | `runtime/` | pulled sandbox state (internal/external) | `rea pull` |
 | `traffic/` | captured API exchanges | `rea http` |
+| `dynamic/frida/` | Frida probe logs | `rea frida` |
 | `findings/`, `docs/` | **your** analysis, notes, reports | you |
 
-`jadx_src/`, `native/`, `apks/`, `runtime/` are **generated** — they are overwritten on the
+`jadx_src/`, `native/`, `apks/`, `runtime/`, `dynamic/frida/` are **generated** — they are overwritten on the
 next `rea` run. Never hand-edit them (the artifact-guard hook blocks it). Analysis, patches,
 and hook scripts go under `findings/`, `docs/`, or `patches/`, which survive.
 
@@ -44,7 +45,7 @@ and hook scripts go under `findings/`, `docs/`, or `patches/`, which survive.
 
 Reach for the `rea` CLI before writing bespoke tooling — it already wraps the tools and the
 workspace conventions. The static pipeline is `rea init → download → decode`; native analysis
-is `rea native`; dynamic work is `rea scrcpy` / `rea pull` / `rea http`. Each has a skill under
+is `rea native`; dynamic work is `rea scrcpy` / `rea pull` / `rea http` / `rea frida`. Each has a skill under
 `.agents/skills/`. Only write a custom script when no subcommand covers the step.
 
 ## 4. Report like an analyst

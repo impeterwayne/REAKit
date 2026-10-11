@@ -3,7 +3,7 @@ import sys
 import shutil
 import subprocess
 from pathlib import Path
-from reakit.utils import Colors, log_info, log_success, log_warn, log_error
+from reakit.utils import Colors, log_info, log_success, log_warn, log_error, log_dim
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 CORE_DIR = BASE_DIR / "core"
@@ -301,6 +301,31 @@ def check_environment() -> dict:
             "status": "ok" if htk_mcp else "warning",
         }
 
+    # 14. Frida host Python module - optional backend for 'rea frida' (dynamic
+    # instrumentation). OPTIONAL: never 'missing' in a way that fails install.
+    # host_frida_version() is guarded (find_spec then import) - no top-level import.
+    frida_mod_ver = None
+    try:
+        from reakit.fridakit import host_frida_version
+        frida_mod_ver = host_frida_version()
+    except Exception:
+        frida_mod_ver = None
+    results["frida"] = {
+        "name": "Frida (Dynamic Instrumentation)",
+        "version": frida_mod_ver or "Not installed (optional)",
+        "path": "pip install 'frida==17.*'" if not frida_mod_ver else "host module",
+        "status": "ok" if frida_mod_ver else "warning",
+    }
+
+    # 15. Frida CLI tools on PATH (frida-ps / frida) - optional convenience.
+    frida_cli_path = shutil.which("frida-ps") or shutil.which("frida")
+    results["frida_cli"] = {
+        "name": "Frida CLI (frida-ps)",
+        "version": "Available" if frida_cli_path else "Not found (optional)",
+        "path": frida_cli_path or "pip install 'frida-tools'",
+        "status": "ok" if frida_cli_path else "warning",
+    }
+
     return results
 
 def print_environment_report():
@@ -511,6 +536,7 @@ def install_environment(
     install_pip: bool = True,
     link_npm: bool = True,
     setup_ghidra: bool = True,
+    skip_frida: bool = False,
 ) -> list[str]:
     """Complete REA_Kit installation: registers PATH, configures environment variables, links scrcpy-cli, bundles tools, builds apkd, and sets up Ghidra."""
     # 0. Ensure POSIX permissions and build apkd if Go compiler exists
@@ -542,6 +568,19 @@ def install_environment(
                 build_ghidra_mcp(ghidra_home)
         except Exception as e:
             log_warn(f"Failed to auto-setup Ghidra bundle: {e}")
+
+    # 3b. Frida (OPTIONAL, dependency-free by default): do NOT pip-install frida
+    # here - REA_Kit stays stdlib-only. Just surface the hint so 'rea frida' works
+    # once the user opts in. Gated by --skip-frida (a clean no-op when set).
+    if not skip_frida:
+        from reakit.fridakit import host_frida_version
+        if host_frida_version():
+            log_dim("frida host module already installed (dynamic instrumentation ready).")
+        else:
+            log_info(
+                "[*] Optional: install frida for dynamic instrumentation ('rea frida'):"
+            )
+            log_dim("    pip install 'frida==17.*' 'frida-tools'   # frida-tools provides the Java/ObjC bridge on 17")
 
     # 4. Configure Windows User PATH and Environment Variables in Registry
     if permanent and os.name == "nt":

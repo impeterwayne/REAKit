@@ -59,15 +59,15 @@ NO_DEVICE_TTL_SECONDS = 60
 SIGNALS = re.compile(
     r"""
       scrcpy-cli\s+(?:tap|swipe|write|key|scroll|screenshot|ui-dump|clipboard-|app-|device-|mirror|view|gui)
-    | \brea\s+(?:scrcpy|mirror|pull|runtime)\b
+    | \brea\s+(?:scrcpy|mirror|pull|runtime|frida|fr|instrument)\b
     | \bui-dump\b
     | \buiautomator\b
     | \bam\s+instrument\b
     # Dynamic-analysis skills that drive a live device.
-    | \bskills?/(?:device-control|runtime-extraction|traffic-capture)\b
+    | \bskills?/(?:device-control|runtime-extraction|traffic-capture|dynamic-instrumentation)\b
     # An activated skill block. Observed transcripts use a bare <SKILL> tag with the
     # name in the body; [^<] also covers an attribute form without escaping the tag.
-    | <SKILL[^<]{0,4000}?(?:device-control|runtime-extraction|traffic-capture)
+    | <SKILL[^<]{0,4000}?(?:device-control|runtime-extraction|traffic-capture|dynamic-instrumentation)
     """,
     re.IGNORECASE | re.VERBOSE | re.DOTALL,
 )

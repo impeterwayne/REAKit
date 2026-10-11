@@ -95,10 +95,12 @@ flowchart TD
         S4["<b>4. rea scrcpy</b><br/><i>Device Control & UI Automation</i>"]
         S5["<b>5. rea pull</b><br/><i>ADB Sandbox Runtime Extraction</i>"]
         S6["<b>6. rea http</b><br/><i>HTTP Toolkit proxy + API traffic log</i>"]
+        S7["<b>7. rea frida</b><br/><i>Frida instrumentation: hooks, RPC, memory</i>"]
 
         S4 -->|Interact & Trigger State| S5
         S5 -->|Iterate / Next Action| S4
         S4 -->|Traffic while driving the app| S6
+        S4 -->|Hook / confirm at runtime| S7
     end
 
     Static --> Native
@@ -108,10 +110,13 @@ flowchart TD
     Native --> WS
     S5 --> WS
     S6 --> WS
+    S7 --> WS
     S4 <--> DEV[(Android Device / Emulator)]
     S6 <--> DEV
+    S7 <--> DEV
     N2 <--> GH[(Ghidra GUI / MCP bridge / CLI)]
     S6 <--> HTK[(HTTP Toolkit app / MCP bridge / CLI)]
+    S7 <--> FR[(frida-server on device)]
 ```
 
 ---
@@ -145,8 +150,9 @@ Profiles: `full` (default), `static`, `native`, `dynamic`, `minimal`. Full detai
 6. **[Runtime Extraction Guide](./docs/runtime_extraction.md)** - ADB privilege escalation (native root, Magisk su, run-as) and sandbox pulling.
 7. **[Native Library Analysis Guide](./docs/native_analysis.md)** - `.so` extraction, ELF/packer fingerprinting, and headless-or-GUI Ghidra analysis via GhidraMCP.
 8. **[API Traffic Capture Guide](./docs/http_toolkit.md)** - listening to live traffic with `rea http`, plus HTTP Toolkit lifecycle, device proxy wiring and the captured-exchange log.
-9. **[Configuration Schema Guide](./docs/workspace_config.md)** - Central `workspace_config.json` schema details.
-10. **[Agentic Harness Guide](./docs/agent_harness.md)** - The `.agents/` Antigravity reverse-engineering harness and the `rea harness` injector.
+9. **[Dynamic Instrumentation Guide](./docs/frida.md)** - instrumenting a running app with `rea frida`: frida-server lifecycle, probe injection, Java/native hooks, RPC and memory.
+10. **[Configuration Schema Guide](./docs/workspace_config.md)** - Central `workspace_config.json` schema details.
+11. **[Agentic Harness Guide](./docs/agent_harness.md)** - The `.agents/` Antigravity reverse-engineering harness and the `rea harness` injector.
 
 ---
 
@@ -161,3 +167,4 @@ To run all capabilities of `REA_Kit`, ensure the following are installed:
 * **A Connected Device or Emulator** (physical device, Genymotion, or Android Studio AVD).
 * **Ghidra 12.x + Maven** (optional, only for `rea native` — see the [Native Library Analysis Guide](./docs/native_analysis.md)).
 * **HTTP Toolkit** (optional, only for `rea http` — install the desktop app from [httptoolkit.com/download](https://httptoolkit.com/download/); see the [API Traffic Capture Guide](./docs/http_toolkit.md)).
+* **Frida** (optional, only for `rea frida` — `pip install 'frida==17.*' 'frida-tools'` plus a rooted device/emulator; `rea frida setup` fetches the matched frida-server, and `frida-tools` provides the Java/ObjC bridge that frida 17 loads on demand. See the [Dynamic Instrumentation Guide](./docs/frida.md)).

@@ -102,6 +102,8 @@ class WorkspaceManager:
                 decompiled = paths["jadx"].exists() and bool(list(paths["jadx"].iterdir()))
                 runtime_files = sum(1 for _ in paths["runtime_internal"].rglob("*") if _.is_file()) if paths["runtime_internal"].exists() else 0
                 native_libs = len(list(paths["native"].rglob("*.so"))) if paths["native"].exists() else 0
+                frida_dir = paths.get("frida")
+                frida_logs = sum(1 for _ in frida_dir.rglob("*") if _.is_file()) if frida_dir and frida_dir.exists() else 0
                 workspaces.append({
                     "package": item.name,
                     "path": item,
@@ -109,5 +111,6 @@ class WorkspaceManager:
                     "decompiled": decompiled,
                     "native_libs": native_libs,
                     "runtime_files": runtime_files,
+                    "frida": frida_logs,
                 })
         return workspaces

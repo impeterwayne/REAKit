@@ -15,6 +15,7 @@ DEFAULT_STRUCTURE = {
     "docs": "docs",
     "native": "native",
     "traffic": "traffic",
+    "frida": "dynamic/frida",
     "runtime": {
         "base": "runtime",
         "internal": "runtime/internal",
@@ -246,6 +247,9 @@ class ConfigManager:
         traffic_struct = struct.get("traffic", "traffic")
         traffic_rel = traffic_struct.get("base", "traffic") if isinstance(traffic_struct, dict) else traffic_struct
 
+        frida_struct = struct.get("frida", "dynamic/frida")
+        frida_rel = frida_struct.get("base", "dynamic/frida") if isinstance(frida_struct, dict) else frida_struct
+
         return {
             "root": app_root,
             "apks": app_root / apks_rel,
@@ -253,6 +257,7 @@ class ConfigManager:
             "docs": app_root / docs_rel,
             "native": app_root / native_rel,
             "traffic": app_root / traffic_rel,
+            "frida": app_root / frida_rel,
             "ghidra_project": app_root / native_rel / "ghidra_project",
             "runtime_internal": app_root / internal_rel,
             "runtime_external": app_root / external_rel,

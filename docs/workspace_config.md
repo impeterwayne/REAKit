@@ -19,6 +19,7 @@ A standard configuration file contains three primary keys:
     "docs": "docs",
     "native": "native",
     "traffic": "traffic",
+    "frida": "dynamic/frida",
     "runtime": {
       "base": "runtime",
       "internal": "runtime/internal",
@@ -57,6 +58,7 @@ Defines the standard internal directory schema created for every target package.
 | `docs` | `"docs"` | Directory for local reverse engineering notes, flow diagrams, and vulnerability reports. |
 | `native` | `"native"` | Extracted `lib/<abi>/*.so` libraries, `native_manifest.json`, and the shared Ghidra project (`rea native`). |
 | `traffic` | `"traffic"` | Captured API traffic snapshots written by `rea http events --save`. |
+| `frida` | `"dynamic/frida"` | Frida probe logs written by `rea frida probe`. |
 | `runtime.base` | `"runtime"` | Base folder for extracted dynamic app storage data. |
 | `runtime.internal` | `"runtime/internal"` | Local mirror for `/data/data/<package_name>/` (SQLite databases, Shared Preferences XML). |
 | `runtime.external` | `"runtime/external"` | Local mirror for `/sdcard/Android/data/<package_name>/` external app storage. |
@@ -85,6 +87,9 @@ environment-variable equivalent, which takes precedence.
 | `ghidraGuiPort` | `GHIDRA_GUI_PORT` | Port the Ghidra GUI plugin serves on (default `8089`). |
 | `ghidraHeadlessPort` | `GHIDRA_HEADLESS_PORT` | Port `rea native serve` listens on (default `8192`). |
 | `httpToolkitHome` | `HTK_DESKTOP_RESOURCES` / `HTK_DESKTOP_EXE` | HTTP Toolkit installation directory for `rea http`. |
+| `fridaServerPort` | `FRIDA_PORT` | Port the on-device frida-server listens on for `rea frida` (default `27042`). |
+| `fridaVersion` | `FRIDA_VERSION` | frida-server version track for `rea frida setup` — a major like `"17"` (resolves to latest 17.x) or an exact version. |
+| `fridaServerName` | `FRIDA_SERVER_NAME` | On-device frida-server binary name (default `frida-server`; rename to disguise it). |
 
 ---
 

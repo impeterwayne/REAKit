@@ -54,6 +54,8 @@ workspaces/
 # Harness install manifest, only written into an injected target
 .reaharness.json
 AndroidHarnessAGY/
+apk-reverse/
+ya-frida-mcp/
 
 # Ghidra release binary + JDK: large downloaded artifacts, fetched not tracked
 # (core/ghidra_mcp is a git submodule - see .gitmodules)

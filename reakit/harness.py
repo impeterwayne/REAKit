@@ -88,11 +88,13 @@ PROFILES: dict[str, dict[str, list[str]]] = {
     "dynamic": {
         "skills": [
             "workspace-setup", "device-control", "runtime-extraction", "traffic-capture",
+            "dynamic-instrumentation",
             "protocol-reversing", "decompilation", "finding-review",
             "loop", "ultrawork",
         ],
         "agents": [
-            "explore", "oracle", "orchestrator", "traffic-analyst", "business-analyst",
+            "explore", "oracle", "orchestrator", "traffic-analyst", "frida-analyst",
+            "business-analyst",
             "screen-analyst", "worker-deep", "worker-quick",
         ],
         "rules": ["dynamic", "reverse", "orchestrate"],

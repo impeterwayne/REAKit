@@ -5,7 +5,7 @@ trigger: always_on
 # Dynamic Analysis Rule: device and traffic hygiene
 
 Applies whenever the task drives a live device or captures traffic — `rea scrcpy`, `rea mirror`,
-`rea pull`, `rea http`, or any hook/instrumentation run. Static-only tasks can ignore it.
+`rea pull`, `rea http`, `rea frida`, or any hook/instrumentation run. Static-only tasks can ignore it.
 
 ## Before touching the device
 
@@ -25,7 +25,19 @@ Applies whenever the task drives a live device or captures traffic — `rea scrc
   the listener says plainly if the app isn't up, and only then is wiring your problem
   (`rea http start`, `rea http android` to set the device proxy and CA).
 - **Pinning is a finding, not an obstacle.** If HTTPS never appears, the app pins certificates —
-  report it and reach for an unpinning hook rather than fighting the proxy.
+  report it and reach for an unpinning hook (`rea frida`) rather than fighting the proxy.
+
+## Instrumenting at runtime
+
+- **Confirm the backend before hooking.** `rea frida doctor` checks frida-server liveness, the
+  host/device version match, ABI and root. `rea frida setup` installs a matched frida-server; only
+  run it when doctor says the server is missing or mismatched.
+- **frida-server is generated state.** Probe logs land under `dynamic/frida/` (off-limits to hand
+  edits). Hand-written agents go under `scripts/` or `patches/`.
+- **Spawn when timing matters; attach otherwise.** Hooks are live before the process resumes.
+  Prefer attaching by PID (`-p`) from `rea frida ps` — frida's enumeration can omit a running app.
+- **Zero events is a signal.** Check the Java bridge loaded, the class is present, the UI was
+  reached, and the server is still alive before concluding there's no behaviour.
 - **Read from the log, don't re-drive blindly.** Exchanges persist under `traffic/`; inspect
   with `rea http events` / `show` / `body`. Drive the app to *produce* the state, then read the
   capture — don't guess at a request you can inspect.

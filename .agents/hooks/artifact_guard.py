@@ -47,6 +47,7 @@ GENERATED_SEGMENTS = {
     "native",     # rea native extract / import -> .so + Ghidra exports
     "apks",       # rea download -> acquired packages
     "runtime",    # rea pull    -> sandbox internal/external state
+    "frida",      # rea frida   -> dynamic/frida probe logs
 }
 
 # Suffixes that are always acquired binaries, wherever they sit. Writing one by hand is
